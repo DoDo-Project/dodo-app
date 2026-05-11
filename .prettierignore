@@ -1,0 +1,9 @@
+dist
+node_modules
+.expo
+coverage
+*.log
+.eslintcache
+
+.github/
+*.md

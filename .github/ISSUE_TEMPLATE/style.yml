@@ -1,0 +1,42 @@
+name: "🎨 UI/UX 개선"
+description: "사용자 경험을 향상시키기 위한 디자인 개선 작업을 정의하고 추적합니다."
+title: "[Style] "
+labels: ["🎨 Style"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: "📄 스타일 변경 요약"
+      description: "수정하려는 비기능적 스타일 변경을 간단히 작성해주세요."
+      placeholder: |
+        - 예: Prettier 포맷팅 재적용, 불필요한 개행 제거, 버튼 Hover 효과 수정
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: "🛠️ 영향 범위 (선택 사항)"
+      description: "어떤 파일/컴포넌트/UI 스타일이 영향을 받는지 작성해주세요."
+      placeholder: |
+        - Global CSS, Nav 컴포넌트, 로그인 페이지 등
+    validations:
+      required: false
+  - type: textarea
+    id: tasks
+    attributes:
+      label: "✅ 세부 작업 목록 (To-Do)"
+      description: "스타일 변경을 위한 세부 작업들을 체크리스트로 작성해주세요."
+      placeholder: |
+        - [ ] UI 스타일 정리
+        - [ ] NAV 컴포넌트 디테일 수정
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: "🏁 완료 조건"
+      description: "스타일 변경이 끝났다고 판단할 조건을 작성해주세요."
+      placeholder: |
+        - 예: "모든 파일이 포맷팅 규칙을 준수하고 UI 스타일이 일관되게 표시된다."
+    validations:
+      required: false
