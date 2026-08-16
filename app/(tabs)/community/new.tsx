@@ -2,10 +2,10 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { DodoColors } from '@/constants/theme';
 
-export default function CommunityScreen() {
+export default function NewPostScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>커뮤니티 화면 준비 중</Text>
+      <Text style={styles.text}>글쓰기 화면 준비 중</Text>
     </View>
   );
 }
