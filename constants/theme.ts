@@ -27,6 +27,22 @@ export const Colors = {
   },
 };
 
+export const DodoColors = {
+  brand: '#e56c31',
+  brandForeground: '#fefefe',
+  secondary: '#f6b93b',
+  secondaryForeground: '#fefefe',
+  background: '#fafafa',
+  surface: '#ffffff',
+  border: '#e5e5e5',
+  textPrimary: '#171717',
+  textSecondary: '#404040',
+  fenceInside: '#22c55e',
+  fenceOutside: '#ef4444',
+  fenceActiveLabel: '#16a34a',
+  fenceIdleLabel: '#6b7280',
+};
+
 export const Fonts = Platform.select({
   ios: {
     /** iOS `UIFontDescriptorSystemDesignDefault` */
