@@ -2,20 +2,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link } from 'expo-router';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
+import { BoardPost, PostListCard } from '@/components/community/post-row';
 import { DodoColors } from '@/constants/theme';
 
 // TODO(이슈4): GET /boards, /boards?sort=popular 연동 후 mock 제거
-type BoardPost = {
-  id: string;
-  title: string;
-  preview: string;
-  author: string;
-  date: string;
-  likeCount: number;
-  commentCount: number;
-  viewCount: number;
-};
-
 const MOCK_POPULAR: BoardPost[] = [
   {
     id: '1',
@@ -72,43 +62,6 @@ const MOCK_RECENT: BoardPost[] = [
   },
 ];
 
-function PostRow({ post }: { post: BoardPost }) {
-  return (
-    <Link href={{ pathname: '/(tabs)/community/[boardId]', params: { boardId: post.id } }} asChild>
-      <TouchableOpacity style={styles.postRow}>
-        <View style={styles.postTextCol}>
-          <Text style={styles.postTitle} numberOfLines={1}>
-            {post.title}
-          </Text>
-          <Text style={styles.postPreview} numberOfLines={1}>
-            {post.preview}
-          </Text>
-          <View style={styles.postMetaRow}>
-            <Ionicons name="thumbs-up" size={12} color={DodoColors.fenceOutside} />
-            <Text style={styles.postMetaText}>{post.likeCount}</Text>
-            <Ionicons
-              name="chatbubble-outline"
-              size={12}
-              color={DodoColors.fenceIdleLabel}
-              style={styles.metaIconGap}
-            />
-            <Text style={styles.postMetaText}>{post.commentCount}</Text>
-            <Text style={styles.postMetaDivider}>|</Text>
-            <Text style={styles.postMetaText}>{post.date}</Text>
-            <Text style={styles.postMetaDivider}>|</Text>
-            <Text style={styles.postMetaText}>{post.author}</Text>
-            <Text style={styles.postMetaDivider}>|</Text>
-            <Text style={styles.postMetaText}>조회 {post.viewCount}</Text>
-          </View>
-        </View>
-        <View style={styles.postThumbnail}>
-          <Ionicons name="image-outline" size={22} color={DodoColors.fenceIdleLabel} />
-        </View>
-      </TouchableOpacity>
-    </Link>
-  );
-}
-
 export default function CommunityListScreen() {
   return (
     <View style={styles.container}>
@@ -127,30 +80,14 @@ export default function CommunityListScreen() {
           <Text style={styles.eyebrow}>POPULAR PICKS</Text>
           <Text style={styles.sectionTitle}>인기 게시물</Text>
           <Text style={styles.sectionSubtitle}>지금 커뮤니티에서 반응이 좋은 이야기를 먼저 만나보세요.</Text>
-
-          <View style={styles.card}>
-            {MOCK_POPULAR.map((post, index) => (
-              <View key={post.id}>
-                <PostRow post={post} />
-                {index < MOCK_POPULAR.length - 1 && <View style={styles.postDivider} />}
-              </View>
-            ))}
-          </View>
+          <PostListCard posts={MOCK_POPULAR} />
         </View>
 
         <View style={styles.section}>
           <Text style={styles.eyebrow}>COMMUNITY BOARD</Text>
           <Text style={styles.sectionTitle}>최근 게시물</Text>
           <Text style={styles.sectionSubtitle}>반려생활 속 소소한 기록부터 유용한 팁까지 한눈에 둘러보세요.</Text>
-
-          <View style={styles.card}>
-            {MOCK_RECENT.map((post, index) => (
-              <View key={post.id}>
-                <PostRow post={post} />
-                {index < MOCK_RECENT.length - 1 && <View style={styles.postDivider} />}
-              </View>
-            ))}
-          </View>
+          <PostListCard posts={MOCK_RECENT} />
         </View>
       </ScrollView>
 
@@ -217,62 +154,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: DodoColors.textSecondary,
     marginBottom: 12,
-  },
-  card: {
-    backgroundColor: DodoColors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: DodoColors.border,
-    paddingHorizontal: 16,
-  },
-  postRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    gap: 12,
-  },
-  postTextCol: {
-    flex: 1,
-    gap: 4,
-  },
-  postTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: DodoColors.textPrimary,
-  },
-  postPreview: {
-    fontSize: 13,
-    color: DodoColors.textSecondary,
-  },
-  postMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  postMetaText: {
-    fontSize: 11,
-    color: DodoColors.fenceIdleLabel,
-    marginLeft: 3,
-  },
-  postMetaDivider: {
-    fontSize: 11,
-    color: DodoColors.border,
-    marginHorizontal: 6,
-  },
-  metaIconGap: {
-    marginLeft: 8,
-  },
-  postThumbnail: {
-    width: 48,
-    height: 48,
-    borderRadius: 10,
-    backgroundColor: DodoColors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  postDivider: {
-    height: 1,
-    backgroundColor: DodoColors.background,
   },
   fab: {
     position: 'absolute',

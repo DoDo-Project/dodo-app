@@ -33,8 +33,27 @@ export default function CommunityStackLayout() {
           headerLeft: () => <BackButton />,
         }}
       />
-      <Stack.Screen name="new" options={{ presentation: 'modal' }} />
-      <Stack.Screen name="my" />
+      <Stack.Screen
+        name="new"
+        options={{
+          presentation: 'modal',
+          headerShown: true,
+          title: '게시글 작성',
+          headerStyle: { backgroundColor: DodoColors.surface },
+          headerShadowVisible: false,
+          headerLeft: () => <BackButton />,
+        }}
+      />
+      <Stack.Screen
+        name="my"
+        options={{
+          headerShown: true,
+          title: '',
+          headerStyle: { backgroundColor: DodoColors.surface },
+          headerShadowVisible: false,
+          headerLeft: () => <BackButton />,
+        }}
+      />
     </Stack>
   );
 }
