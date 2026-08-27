@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DodoColors } from '@/constants/theme';
 
@@ -21,90 +22,93 @@ const MOCK_NOTICES: { tag: '안내' | '긴급'; title: string }[] = [
 ];
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* AI 건강 레포트 */}
-      <View style={styles.card}>
-        <View style={styles.cardHeaderRow}>
-          <Ionicons name="folder-outline" size={18} color={DodoColors.textPrimary} />
-          <Text style={styles.cardHeaderText}>AI 건강 레포트</Text>
-        </View>
-
-        <View style={styles.reportIllustration}>
-          <Ionicons name="paw" size={48} color={DodoColors.secondary} />
-        </View>
-
-        <Text style={styles.reportTitle}>{MOCK_PET.name}의 건강 데이터를 분석 중이에요.</Text>
-        <Text style={styles.reportDescription}>
-          {MOCK_PET.name}의 첫 건강 레포트를 만들 수 있도록 산책과 건강 기록을 조금 더 쌓아보세요.
-        </Text>
-
-        <TouchableOpacity style={styles.reportLinkRow}>
-          <Text style={styles.reportLinkText}>레포트 준비 중</Text>
-          <Ionicons name="chevron-forward" size={14} color={DodoColors.fenceIdleLabel} />
-        </TouchableOpacity>
-      </View>
-
-      {/* 펫 카드 */}
-      <View style={styles.card}>
-        <View style={styles.petHeaderRow}>
-          <View style={styles.petAvatar}>
-            <Ionicons name="paw" size={28} color={DodoColors.brandForeground} />
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}>
+        {/* AI 건강 레포트 */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <Ionicons name="folder-outline" size={18} color={DodoColors.textPrimary} />
+            <Text style={styles.cardHeaderText}>AI 건강 레포트</Text>
           </View>
-          <View style={styles.petNameCol}>
-            <Text style={styles.petName}>{MOCK_PET.name}</Text>
-          </View>
-          <View style={styles.ageBadge}>
-            <Text style={styles.ageBadgeText}>{MOCK_PET.ageLabel}</Text>
-          </View>
-        </View>
 
-        <View style={styles.petStatsRow}>
-          <View style={styles.petStatItem}>
-            <Text style={styles.petStatLabel}>품종</Text>
-            <Text style={styles.petStatValue}>{MOCK_PET.breed}</Text>
+          <View style={styles.reportIllustration}>
+            <Ionicons name="paw" size={48} color={DodoColors.secondary} />
           </View>
-          <View style={styles.petStatItem}>
-            <Text style={styles.petStatLabel}>체중</Text>
-            <Text style={styles.petStatValue}>{MOCK_PET.weight}</Text>
-          </View>
-        </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbnailRow}>
-          {MOCK_PET_PHOTOS.map((id, index) => (
-            <View key={id} style={[styles.thumbnail, index === 0 && styles.thumbnailSelected]}>
-              <Ionicons name="paw-outline" size={20} color={DodoColors.fenceIdleLabel} />
-            </View>
-          ))}
-        </ScrollView>
-      </View>
+          <Text style={styles.reportTitle}>{MOCK_PET.name}의 건강 데이터를 분석 중이에요.</Text>
+          <Text style={styles.reportDescription}>
+            {MOCK_PET.name}의 첫 건강 레포트를 만들 수 있도록 산책과 건강 기록을 조금 더 쌓아보세요.
+          </Text>
 
-      {/* 공지사항 */}
-      <View style={styles.card}>
-        <View style={styles.noticeHeaderRow}>
-          <Text style={styles.noticeHeaderText}>공지사항</Text>
-          <TouchableOpacity>
-            <Ionicons name="add" size={20} color={DodoColors.textSecondary} />
+          <TouchableOpacity style={styles.reportLinkRow}>
+            <Text style={styles.reportLinkText}>레포트 준비 중</Text>
+            <Ionicons name="chevron-forward" size={14} color={DodoColors.fenceIdleLabel} />
           </TouchableOpacity>
         </View>
 
-        {MOCK_NOTICES.map((notice, index) => (
-          <View
-            key={notice.title}
-            style={[styles.noticeRow, index === MOCK_NOTICES.length - 1 && styles.noticeRowLast]}
-          >
-            <View style={[styles.noticeTag, notice.tag === '긴급' && styles.noticeTagUrgent]}>
-              <Text style={[styles.noticeTagText, notice.tag === '긴급' && styles.noticeTagTextUrgent]}>
-                {notice.tag}
+        {/* 펫 카드 */}
+        <View style={styles.card}>
+          <View style={styles.petHeaderRow}>
+            <View style={styles.petAvatar}>
+              <Ionicons name="paw" size={28} color={DodoColors.brandForeground} />
+            </View>
+            <View style={styles.petNameCol}>
+              <Text style={styles.petName}>{MOCK_PET.name}</Text>
+            </View>
+            <View style={styles.ageBadge}>
+              <Text style={styles.ageBadgeText}>{MOCK_PET.ageLabel}</Text>
+            </View>
+          </View>
+
+          <View style={styles.petStatsRow}>
+            <View style={styles.petStatItem}>
+              <Text style={styles.petStatLabel}>품종</Text>
+              <Text style={styles.petStatValue}>{MOCK_PET.breed}</Text>
+            </View>
+            <View style={styles.petStatItem}>
+              <Text style={styles.petStatLabel}>체중</Text>
+              <Text style={styles.petStatValue}>{MOCK_PET.weight}</Text>
+            </View>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbnailRow}>
+            {MOCK_PET_PHOTOS.map((id, index) => (
+              <View key={id} style={[styles.thumbnail, index === 0 && styles.thumbnailSelected]}>
+                <Ionicons name="paw-outline" size={20} color={DodoColors.fenceIdleLabel} />
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* 공지사항 */}
+        <View style={styles.card}>
+          <View style={styles.noticeHeaderRow}>
+            <Text style={styles.noticeHeaderText}>공지사항</Text>
+            <TouchableOpacity>
+              <Ionicons name="add" size={20} color={DodoColors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {MOCK_NOTICES.map((notice, index) => (
+            <View
+              key={notice.title}
+              style={[styles.noticeRow, index === MOCK_NOTICES.length - 1 && styles.noticeRowLast]}
+            >
+              <View style={[styles.noticeTag, notice.tag === '긴급' && styles.noticeTagUrgent]}>
+                <Text style={[styles.noticeTagText, notice.tag === '긴급' && styles.noticeTagTextUrgent]}>
+                  {notice.tag}
+                </Text>
+              </View>
+              <Text style={styles.noticeTitle} numberOfLines={1}>
+                {notice.title}
               </Text>
             </View>
-            <Text style={styles.noticeTitle} numberOfLines={1}>
-              {notice.title}
-            </Text>
-          </View>
-        ))}
-      </View>
-    </ScrollView>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 

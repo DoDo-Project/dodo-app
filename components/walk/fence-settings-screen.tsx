@@ -1,5 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DodoColors } from '@/constants/theme';
 
@@ -37,53 +38,56 @@ type Props = {
 export function FenceSettingsScreen({ renderMap }: Props) {
   const [selectedPetId, setSelectedPetId] = useState(MOCK_FENCES[1].petId);
   const selectedFence = MOCK_FENCES.find((f) => f.petId === selectedPetId) ?? MOCK_FENCES[0];
+  const insets = useSafeAreaInsets();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>산책</Text>
-      <Text style={styles.subtitle}>반려동물 안전 울타리를 설정하세요.</Text>
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}>
+        <Text style={styles.title}>산책</Text>
+        <Text style={styles.subtitle}>반려동물 안전 울타리를 설정하세요.</Text>
 
-      <View style={styles.card}>
-        <Text style={styles.sectionTitle}>울타리 설정</Text>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>울타리 설정</Text>
 
-        <Text style={styles.label}>반려동물 선택</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-          {MOCK_FENCES.map((fence) => {
-            const selected = fence.petId === selectedPetId;
-            return (
-              <TouchableOpacity
-                key={fence.petId}
-                style={[styles.chip, selected && styles.chipSelected]}
-                onPress={() => setSelectedPetId(fence.petId)}
-              >
-                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{fence.petName}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+          <Text style={styles.label}>반려동물 선택</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+            {MOCK_FENCES.map((fence) => {
+              const selected = fence.petId === selectedPetId;
+              return (
+                <TouchableOpacity
+                  key={fence.petId}
+                  style={[styles.chip, selected && styles.chipSelected]}
+                  onPress={() => setSelectedPetId(fence.petId)}
+                >
+                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{fence.petName}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
-        {renderMap({ selectedFence, fences: MOCK_FENCES })}
+          {renderMap({ selectedFence, fences: MOCK_FENCES })}
 
-        <View style={styles.fenceInfoRow}>
-          <View style={styles.fenceInfoTextCol}>
-            <View style={styles.fenceInfoNameRow}>
-              <Text style={styles.fenceInfoName}>{selectedFence.petName}</Text>
-              <View
-                style={[styles.statusBadge, selectedFence.active ? styles.statusBadgeActive : styles.statusBadgeIdle]}
-              >
-                <Text style={[styles.statusBadgeText, selectedFence.active && styles.statusBadgeTextActive]}>
-                  {selectedFence.active ? '사용 중' : '미사용'}
-                </Text>
+          <View style={styles.fenceInfoRow}>
+            <View style={styles.fenceInfoTextCol}>
+              <View style={styles.fenceInfoNameRow}>
+                <Text style={styles.fenceInfoName}>{selectedFence.petName}</Text>
+                <View
+                  style={[styles.statusBadge, selectedFence.active ? styles.statusBadgeActive : styles.statusBadgeIdle]}
+                >
+                  <Text style={[styles.statusBadgeText, selectedFence.active && styles.statusBadgeTextActive]}>
+                    {selectedFence.active ? '사용 중' : '미사용'}
+                  </Text>
+                </View>
               </View>
+              <Text style={styles.fenceInfoRadius}>반경 {selectedFence.radiusMeters}m</Text>
             </View>
-            <Text style={styles.fenceInfoRadius}>반경 {selectedFence.radiusMeters}m</Text>
+            <TouchableOpacity style={styles.editButton}>
+              <Text style={styles.editButtonText}>울타리 수정</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.editButton}>
-            <Text style={styles.editButtonText}>울타리 수정</Text>
-          </TouchableOpacity>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 

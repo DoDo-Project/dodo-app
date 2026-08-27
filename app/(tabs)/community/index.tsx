@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link } from 'expo-router';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BoardPost, PostListCard } from '@/components/community/post-row';
 import { DodoColors } from '@/constants/theme';
@@ -63,9 +64,10 @@ const MOCK_RECENT: BoardPost[] = [
 ];
 
 export default function CommunityListScreen() {
+  const insets = useSafeAreaInsets();
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}>
         <View style={styles.topRow}>
           <Text style={styles.screenTitle}>커뮤니티</Text>
           <Link href="/(tabs)/community/my" asChild>
