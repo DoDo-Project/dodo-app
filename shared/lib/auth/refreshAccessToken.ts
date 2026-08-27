@@ -5,15 +5,19 @@ import { apiConfig } from '@/shared/config';
 import { useAuthStore } from './authStore';
 import * as tokenStorage from './tokenStorage';
 
-/**
- * TODO(백엔드 협의 필요): 정확한 리프레시 엔드포인트/요청·응답 필드명 미확정.
- * 아래는 { refreshToken } 요청 → { accessToken, refreshToken, accessTokenTtlMs } 응답을
- * 가정한 값이며, 실제 스펙 확인 후 수정해야 한다.
- */
-async function requestNewAccessToken(refreshToken: string) {
-  const { data } = await axios.post<{ accessToken: string; refreshToken?: string; accessTokenTtlMs: number }>(
-    `${apiConfig.baseURL}/auth/refresh`,
+// 웹(dodo-frontend)의 shared/lib/auth/refreshSession.ts와 동일한 계약.
+interface ReissueResponse {
+  accessToken: string;
+  refreshToken: string;
+  /** OpenAPI 기준 초 단위 — ms로 변환해서 저장 */
+  accessTokenExpiresIn: number;
+}
+
+async function requestReissue(refreshToken: string): Promise<ReissueResponse> {
+  const { data } = await axios.post<ReissueResponse>(
+    `${apiConfig.baseURL}/auth/reissue`,
     { refreshToken },
+    { headers: { 'Content-Type': 'application/json' }, timeout: apiConfig.timeout },
   );
   return data;
 }
@@ -35,11 +39,11 @@ async function performRefresh(): Promise<string | null> {
   if (!refreshToken) return null;
 
   try {
-    const result = await requestNewAccessToken(refreshToken);
-    const accessTokenTtlMs = result.accessTokenTtlMs;
+    const result = await requestReissue(refreshToken);
+    const accessTokenTtlMs = result.accessTokenExpiresIn * 1000;
     await tokenStorage.saveTokens({
       accessToken: result.accessToken,
-      refreshToken: result.refreshToken ?? refreshToken,
+      refreshToken: result.refreshToken,
       accessTokenTtlMs,
       accessTokenExpiresAt: Date.now() + accessTokenTtlMs,
     });

@@ -3,13 +3,23 @@ import { create } from 'zustand';
 import * as tokenStorage from './tokenStorage';
 import type { AuthProfile, TokenPair } from './tokenStorage';
 
+export type LoginSessionData = {
+  accessToken: string;
+  refreshToken: string;
+  /** 밀리초 (POST /auth/social-login, PUT /users/me/profile 응답 기준) */
+  accessTokenExpiresIn: number;
+  profileUrl: string;
+  nickname?: string;
+  region?: string;
+};
+
 type AuthState = {
   /** 앱 시작 시 SecureStore/AsyncStorage에서 세션 복원이 끝났는지 여부 */
   isHydrated: boolean;
   isAuthenticated: boolean;
   profile: AuthProfile;
   hydrate: () => Promise<void>;
-  setSession: (params: { tokens: TokenPair; profile: AuthProfile }) => Promise<void>;
+  setSession: (login: LoginSessionData) => Promise<void>;
   updateProfile: (profile: Partial<AuthProfile>) => Promise<void>;
   clearSession: () => Promise<void>;
 };
@@ -33,7 +43,20 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ isHydrated: true, isAuthenticated: !!accessToken, profile });
   },
 
-  setSession: async ({ tokens, profile }) => {
+  setSession: async (login) => {
+    const tokens: TokenPair = {
+      accessToken: login.accessToken,
+      refreshToken: login.refreshToken,
+      accessTokenTtlMs: login.accessTokenExpiresIn,
+      accessTokenExpiresAt: Date.now() + login.accessTokenExpiresIn,
+    };
+    const profile: AuthProfile = {
+      profileUrl: login.profileUrl,
+      nickname: login.nickname ?? null,
+      region: login.region ?? null,
+      notificationEnabled: false,
+    };
+
     await Promise.all([tokenStorage.saveTokens(tokens), tokenStorage.saveProfile(profile)]);
     set({ isAuthenticated: true, profile });
   },

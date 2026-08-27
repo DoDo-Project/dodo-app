@@ -1,9 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Link, useRouter } from 'expo-router';
 import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { logout } from '@/shared/api/authApi';
 import { DodoColors } from '@/constants/theme';
 import { useAuthStore } from '@/shared/lib/auth/authStore';
+import * as tokenStorage from '@/shared/lib/auth/tokenStorage';
 
 // TODO(이슈4): GET /users/me 연동 후 mock 제거
 const MOCK_USER = {
@@ -37,6 +40,7 @@ const ACCOUNT_MENU: MenuItem[] = [
 export default function MyPageScreen() {
   const router = useRouter();
   const clearSession = useAuthStore((state) => state.clearSession);
+  const insets = useSafeAreaInsets();
 
   const handleLogout = () => {
     Alert.alert('로그아웃', '로그아웃 하시겠어요?', [
@@ -45,6 +49,11 @@ export default function MyPageScreen() {
         text: '로그아웃',
         style: 'destructive',
         onPress: async () => {
+          const refreshToken = await tokenStorage.getRefreshToken();
+          if (refreshToken) {
+            // 서버 로그아웃 실패해도 로컬 세션은 정리한다 (토큰이 이미 무효했을 수도 있음)
+            await logout(refreshToken).catch(() => {});
+          }
           await clearSession();
           router.replace('/(tabs)');
         },
@@ -83,22 +92,24 @@ export default function MyPageScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Ionicons name="paw" size={28} color={DodoColors.brandForeground} />
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}>
+        <View style={styles.profileCard}>
+          <View style={styles.avatar}>
+            <Ionicons name="paw" size={28} color={DodoColors.brandForeground} />
+          </View>
+          <Text style={styles.nickname}>{MOCK_USER.nickname}님</Text>
+          <Text style={styles.profileMeta}>{MOCK_USER.region}</Text>
+          <Text style={styles.profileMeta}>{MOCK_USER.email}</Text>
         </View>
-        <Text style={styles.nickname}>{MOCK_USER.nickname}님</Text>
-        <Text style={styles.profileMeta}>{MOCK_USER.region}</Text>
-        <Text style={styles.profileMeta}>{MOCK_USER.email}</Text>
-      </View>
 
-      <Text style={styles.sectionLabel}>반려동물</Text>
-      <View style={styles.menuCard}>{PET_MENU.map(renderRow)}</View>
+        <Text style={styles.sectionLabel}>반려동물</Text>
+        <View style={styles.menuCard}>{PET_MENU.map(renderRow)}</View>
 
-      <Text style={styles.sectionLabel}>회원정보</Text>
-      <View style={styles.menuCard}>{ACCOUNT_MENU.map(renderRow)}</View>
-    </ScrollView>
+        <Text style={styles.sectionLabel}>회원정보</Text>
+        <View style={styles.menuCard}>{ACCOUNT_MENU.map(renderRow)}</View>
+      </ScrollView>
+    </View>
   );
 }
 
