@@ -47,7 +47,8 @@
           "client_id": "furxnmcb69"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/withNaverMapsRepository.js"
     ],
     "experiments": {
       "typedRoutes": true,
