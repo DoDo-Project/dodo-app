@@ -34,6 +34,17 @@ export default function CommunityStackLayout() {
         }}
       />
       <Stack.Screen
+        name="[boardId]/edit"
+        options={{
+          presentation: 'modal',
+          headerShown: true,
+          title: '게시글 수정',
+          headerStyle: { backgroundColor: DodoColors.surface },
+          headerShadowVisible: false,
+          headerLeft: () => <BackButton />,
+        }}
+      />
+      <Stack.Screen
         name="new"
         options={{
           presentation: 'modal',

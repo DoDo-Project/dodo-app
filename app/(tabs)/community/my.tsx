@@ -1,47 +1,50 @@
+import { Link } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
 
 import { BoardPost, PostListCard } from '@/components/community/post-row';
 import { DodoColors } from '@/constants/theme';
+import { getMyBoards, getMyComments, type BoardListItem } from '@/shared/api/communityApi';
+import { formatShortDate } from '@/shared/lib/format/date';
 
-// TODO(이슈4): GET /boards/me, GET /comments/me 연동 후 mock 제거
-const MOCK_MY_POSTS: BoardPost[] = [
-  {
-    id: '4',
-    title: '오늘 산책하다 만난 귀여운 친구들',
-    preview: '귀여운 아기들을 봤어요~~',
-    author: '조펭이',
-    date: '6월 12일',
-    likeCount: 1,
-    commentCount: 0,
-    viewCount: 4,
-  },
-  {
-    id: '2',
-    title: '마루는 강쥐',
-    preview: '귀여움',
-    author: '조펭이',
-    date: '6월 12일',
-    likeCount: 3,
-    commentCount: 0,
-    viewCount: 2,
-  },
-  {
-    id: '1',
-    title: '안녕',
-    preview: 'ㅎㅇ',
-    author: '조펭이',
-    date: '6월 12일',
-    likeCount: 4,
-    commentCount: 0,
-    viewCount: 5,
-  },
-];
+function toBoardPost(board: BoardListItem): BoardPost {
+  return {
+    id: String(board.boardId),
+    title: board.boardTitle,
+    preview: board.boardContentPreview,
+    author: board.nickname,
+    date: formatShortDate(board.createdAt),
+    likeCount: board.likeCount,
+    commentCount: board.commentCount,
+    viewCount: board.viewCount,
+  };
+}
 
 type TabKey = 'posts' | 'comments';
 
 export default function MyActivityScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('posts');
+  const [postsPage, setPostsPage] = useState(0);
+  const [commentsPage, setCommentsPage] = useState(0);
+
+  const postsQuery = useQuery({
+    queryKey: ['boards', 'me', postsPage],
+    queryFn: () => getMyBoards(postsPage, 10),
+    enabled: activeTab === 'posts',
+  });
+
+  const commentsQuery = useQuery({
+    queryKey: ['comments', 'me', commentsPage],
+    queryFn: () => getMyComments(commentsPage, 10),
+    enabled: activeTab === 'comments',
+  });
+
+  const posts = postsQuery.data?.boards ?? [];
+  // 웹과 동일: /boards/me 응답엔 totalPages가 없어 length>=size 휴리스틱으로 다음 페이지 여부 판단
+  const postsHasNext = posts.length >= 10;
+  const comments = commentsQuery.data?.data ?? [];
+  const commentsPageInfo = commentsQuery.data?.pageInfo;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -61,21 +64,62 @@ export default function MyActivityScreen() {
       </View>
 
       {activeTab === 'posts' ? (
-        <PostListCard posts={MOCK_MY_POSTS} />
-      ) : (
+        postsQuery.isLoading ? (
+          <ActivityIndicator color={DodoColors.brand} />
+        ) : posts.length === 0 ? (
+          <View style={styles.commentsEmptyCard}>
+            <Text style={styles.commentsEmptyText}>아직 작성한 게시글이 없어요.</Text>
+          </View>
+        ) : (
+          <PostListCard posts={posts.map(toBoardPost)} />
+        )
+      ) : commentsQuery.isLoading ? (
+        <ActivityIndicator color={DodoColors.brand} />
+      ) : comments.length === 0 ? (
         <View style={styles.commentsEmptyCard}>
-          <Text style={styles.commentsEmptyText}>댓글 목록 준비 중</Text>
+          <Text style={styles.commentsEmptyText}>아직 작성한 댓글이 없어요.</Text>
+        </View>
+      ) : (
+        <View style={styles.commentsCard}>
+          {comments.map((comment, index) => (
+            <Link
+              key={comment.commentId}
+              href={{ pathname: '/(tabs)/community/[boardId]', params: { boardId: String(comment.boardId) } }}
+              asChild
+            >
+              <TouchableOpacity style={[styles.commentRow, index === comments.length - 1 && styles.commentRowLast]}>
+                <Text style={styles.commentBoardTitle} numberOfLines={1}>
+                  {comment.boardTitle}
+                </Text>
+                <Text style={styles.commentContent} numberOfLines={1}>
+                  {comment.commentContent}
+                </Text>
+              </TouchableOpacity>
+            </Link>
+          ))}
         </View>
       )}
 
       <View style={styles.pagination}>
-        <TouchableOpacity style={styles.pageButton} disabled>
+        <TouchableOpacity
+          style={styles.pageButton}
+          disabled={activeTab === 'posts' ? postsPage === 0 : commentsPage === 0}
+          onPress={() =>
+            activeTab === 'posts' ? setPostsPage((p) => Math.max(0, p - 1)) : setCommentsPage((p) => Math.max(0, p - 1))
+          }
+        >
           <Text style={styles.pageButtonTextDisabled}>이전</Text>
         </TouchableOpacity>
         <View style={styles.pageNumberActive}>
-          <Text style={styles.pageNumberActiveText}>1</Text>
+          <Text style={styles.pageNumberActiveText}>{(activeTab === 'posts' ? postsPage : commentsPage) + 1}</Text>
         </View>
-        <TouchableOpacity style={styles.pageButton} disabled>
+        <TouchableOpacity
+          style={styles.pageButton}
+          disabled={
+            activeTab === 'posts' ? !postsHasNext : !commentsPageInfo || commentsPage + 1 >= commentsPageInfo.totalPages
+          }
+          onPress={() => (activeTab === 'posts' ? setPostsPage((p) => p + 1) : setCommentsPage((p) => p + 1))}
+        >
           <Text style={styles.pageButtonTextDisabled}>다음</Text>
         </TouchableOpacity>
       </View>
@@ -145,6 +189,30 @@ const styles = StyleSheet.create({
   commentsEmptyText: {
     fontSize: 13,
     color: DodoColors.fenceIdleLabel,
+  },
+  commentsCard: {
+    backgroundColor: DodoColors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: DodoColors.border,
+    paddingHorizontal: 16,
+  },
+  commentRow: {
+    paddingVertical: 14,
+    gap: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: DodoColors.background,
+  },
+  commentRowLast: {
+    borderBottomWidth: 0,
+  },
+  commentBoardTitle: {
+    fontSize: 12,
+    color: DodoColors.fenceIdleLabel,
+  },
+  commentContent: {
+    fontSize: 14,
+    color: DodoColors.textPrimary,
   },
   pagination: {
     flexDirection: 'row',

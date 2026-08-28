@@ -1,8 +1,8 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useMutation } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -16,51 +16,58 @@ import {
 
 import { MultiImagePicker } from '@/components/common/multi-image-picker';
 import { DodoColors } from '@/constants/theme';
-import { createBoard, getTempSaveBoard, tempSaveBoard } from '@/shared/api/communityApi';
+import { getBoardDetail, tempSaveBoard, updateBoard } from '@/shared/api/communityApi';
 
-const DRAFT_SESSION_KEY_STORAGE = 'dodo.boardDraft.sessionKey';
-
-export default function NewPostScreen() {
+export default function EditPostScreen() {
+  const { boardId } = useLocalSearchParams<{ boardId: string }>();
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [imageUrls, setImageUrls] = useState<string[]>([]);
+
+  const boardQuery = useQuery({
+    queryKey: ['board', boardId],
+    queryFn: () => getBoardDetail(boardId),
+    enabled: !!boardId,
+  });
+
+  useEffect(() => {
+    if (boardQuery.data) {
+      setTitle(boardQuery.data.boardTitle);
+      setContent(boardQuery.data.boardContent);
+      setImageUrls(boardQuery.data.imageFileUrls);
+    }
+  }, [boardQuery.data]);
+
   const canSubmit = title.trim().length > 0 && content.trim().length > 0;
 
-  // 웹과 동일: 임시저장 세션키가 로컬에 있으면 진입 시 자동으로 불러와 폼을 프리필한다.
-  useEffect(() => {
-    AsyncStorage.getItem(DRAFT_SESSION_KEY_STORAGE).then(async (sessionKey) => {
-      if (!sessionKey) return;
-      try {
-        const draft = await getTempSaveBoard(sessionKey);
-        if (draft.boardTitle) setTitle(draft.boardTitle);
-        if (draft.boardContent) setContent(draft.boardContent);
-        if (draft.imageFileUrls) setImageUrls(draft.imageFileUrls);
-        else if (draft.imageFileUrl) setImageUrls([draft.imageFileUrl]);
-      } catch {
-        await AsyncStorage.removeItem(DRAFT_SESSION_KEY_STORAGE);
-      }
-    });
-  }, []);
-
   const submitMutation = useMutation({
-    mutationFn: () => createBoard({ boardTitle: title.trim(), boardContent: content.trim(), imageFileUrls: imageUrls }),
-    onSuccess: async ({ boardId }) => {
-      await AsyncStorage.removeItem(DRAFT_SESSION_KEY_STORAGE);
-      router.replace({ pathname: '/(tabs)/community/[boardId]', params: { boardId: String(boardId) } });
+    mutationFn: () =>
+      updateBoard(boardId, {
+        boardTitle: title.trim(),
+        boardContent: content.trim(),
+        imageFileUrls: imageUrls,
+      }),
+    onSuccess: () => {
+      router.replace({ pathname: '/(tabs)/community/[boardId]', params: { boardId } });
     },
-    onError: () => Alert.alert('오류', '게시글을 등록하지 못했어요. 잠시 후 다시 시도해주세요.'),
+    onError: () => Alert.alert('오류', '게시글을 수정하지 못했어요. 잠시 후 다시 시도해주세요.'),
   });
 
   const tempSaveMutation = useMutation({
     mutationFn: () =>
-      tempSaveBoard({ boardTitle: title.trim(), boardContent: content.trim(), imageFileUrls: imageUrls }),
-    onSuccess: async ({ sessionKey }) => {
-      await AsyncStorage.setItem(DRAFT_SESSION_KEY_STORAGE, sessionKey);
-      Alert.alert('임시 저장', '작성 중인 내용을 임시 저장했어요.');
-    },
+      tempSaveBoard({ boardTitle: title.trim(), boardContent: content.trim(), imageFileUrls: imageUrls }, boardId),
+    onSuccess: () => Alert.alert('임시 저장', '수정 중인 내용을 임시 저장했어요.'),
     onError: () => Alert.alert('오류', '임시 저장에 실패했어요.'),
   });
+
+  if (boardQuery.isLoading || !boardQuery.data) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator color={DodoColors.brand} />
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
@@ -73,7 +80,6 @@ export default function NewPostScreen() {
           <Text style={styles.label}>게시글 제목 *</Text>
           <TextInput
             style={styles.input}
-            placeholder="예: 오늘 산책하다 만난 귀여운 친구들"
             placeholderTextColor={DodoColors.fenceIdleLabel}
             value={title}
             onChangeText={setTitle}
@@ -84,7 +90,6 @@ export default function NewPostScreen() {
           <Text style={styles.label}>게시글 내용 *</Text>
           <TextInput
             style={styles.textarea}
-            placeholder="반려동물과의 오늘 이야기를 자유롭게 적어보세요."
             placeholderTextColor={DodoColors.fenceIdleLabel}
             value={content}
             onChangeText={setContent}
@@ -95,7 +100,6 @@ export default function NewPostScreen() {
 
         <View style={styles.field}>
           <Text style={styles.label}>이미지 첨부</Text>
-          <Text style={styles.hint}>PNG, JPG 형식 / 장당 최대 10MB · 전체 최대 50MB</Text>
           <MultiImagePicker imageUrls={imageUrls} onChange={setImageUrls} />
         </View>
 
@@ -118,7 +122,7 @@ export default function NewPostScreen() {
           disabled={!canSubmit || submitMutation.isPending}
           onPress={() => submitMutation.mutate()}
         >
-          <Text style={styles.primaryButtonText}>{submitMutation.isPending ? '게시 중...' : '게시하기'}</Text>
+          <Text style={styles.primaryButtonText}>{submitMutation.isPending ? '수정 중...' : '수정하기'}</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -129,6 +133,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: DodoColors.background,
+  },
+  centerContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   content: {
     padding: 16,
@@ -142,11 +150,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: DodoColors.textPrimary,
-  },
-  hint: {
-    fontSize: 11,
-    color: DodoColors.fenceIdleLabel,
-    marginTop: -4,
   },
   input: {
     height: 44,
