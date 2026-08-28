@@ -1,16 +1,62 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { DodoColors } from '@/constants/theme';
+import {
+  approveFamilyApplication,
+  getBlockedUsers,
+  getPendingUsers,
+  unblockFamilyUser,
+  type FamilyApprovalAction,
+} from '@/shared/api/familyApi';
 
-import { MOCK_BLOCKED, MOCK_RECEIVED_REQUESTS, type ReceivedRequestStatus } from './_mock';
-
-const FILTERS: ReceivedRequestStatus[] = ['승인 대기', '거절됨'];
+type FilterLabel = '승인 대기' | '거절됨';
+const FILTERS: FilterLabel[] = ['승인 대기', '거절됨'];
 
 export default function FamilyReceivedScreen() {
-  const [filter, setFilter] = useState<ReceivedRequestStatus>('승인 대기');
-  const filteredRequests = MOCK_RECEIVED_REQUESTS.filter((r) => r.status === filter);
+  const queryClient = useQueryClient();
+  const [filter, setFilter] = useState<FilterLabel>('승인 대기');
+
+  const pendingQuery = useQuery({
+    queryKey: ['family', 'pending-users', filter],
+    queryFn: () => getPendingUsers(filter === '승인 대기' ? 'PENDING' : 'REJECTED', 0, 20),
+  });
+
+  const blockedQuery = useQuery({
+    queryKey: ['family', 'blocked-users'],
+    queryFn: () => getBlockedUsers(0, 20),
+  });
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ['family', 'pending-users'] });
+    queryClient.invalidateQueries({ queryKey: ['family', 'blocked-users'] });
+  };
+
+  const approvalMutation = useMutation({
+    mutationFn: ({
+      petId,
+      targetUserId,
+      action,
+    }: {
+      petId: number;
+      targetUserId: string;
+      action: FamilyApprovalAction;
+    }) => approveFamilyApplication(petId, targetUserId, action),
+    onSuccess: invalidateAll,
+    onError: () => Alert.alert('오류', '요청을 처리하지 못했어요.'),
+  });
+
+  const unblockMutation = useMutation({
+    mutationFn: ({ petId, targetUserId }: { petId: number; targetUserId: string }) =>
+      unblockFamilyUser(petId, targetUserId),
+    onSuccess: invalidateAll,
+    onError: () => Alert.alert('오류', '차단을 해제하지 못했어요.'),
+  });
+
+  const requests = pendingQuery.data?.users ?? [];
+  const blocked = blockedQuery.data?.users ?? [];
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -45,13 +91,55 @@ export default function FamilyReceivedScreen() {
           </View>
         </View>
 
-        {filteredRequests.length === 0 ? (
+        {pendingQuery.isLoading ? (
+          <ActivityIndicator color={DodoColors.brand} />
+        ) : requests.length === 0 ? (
           <Text style={styles.emptyText}>아직 받은 신청이 없어요.</Text>
         ) : (
-          filteredRequests.map((request) => (
-            <View key={request.id} style={styles.requestRow}>
-              <Text style={styles.requestPetName}>{request.petName}</Text>
-              <Text style={styles.requestDate}>{request.sentAt}</Text>
+          requests.map((request) => (
+            <View key={`${request.petId}-${request.userId}`} style={styles.requestRow}>
+              <View style={styles.requestTextCol}>
+                <Text style={styles.requestPetName}>
+                  {request.userName} → {request.petName}
+                </Text>
+                <Text style={styles.requestDate}>{request.appliedAt}</Text>
+              </View>
+              {filter === '승인 대기' && (
+                <View style={styles.requestActions}>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() =>
+                      approvalMutation.mutate({
+                        petId: request.petId,
+                        targetUserId: request.userId,
+                        action: 'APPROVED',
+                      })
+                    }
+                  >
+                    <Text style={styles.actionButtonText}>승인</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.actionButton}
+                    onPress={() =>
+                      approvalMutation.mutate({
+                        petId: request.petId,
+                        targetUserId: request.userId,
+                        action: 'REJECTED',
+                      })
+                    }
+                  >
+                    <Text style={styles.actionButtonText}>거절</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionButton, styles.actionButtonDanger]}
+                    onPress={() =>
+                      approvalMutation.mutate({ petId: request.petId, targetUserId: request.userId, action: 'BLOCKED' })
+                    }
+                  >
+                    <Text style={styles.actionButtonDangerText}>차단</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           ))
         )}
@@ -59,12 +147,22 @@ export default function FamilyReceivedScreen() {
 
       <View style={styles.card}>
         <Text style={styles.infoLabel}>차단 목록</Text>
-        {MOCK_BLOCKED.length === 0 ? (
-          <Text style={styles.emptyText}>선택한 반려동물의 차단 목록이 비어 있어요.</Text>
+        {blockedQuery.isLoading ? (
+          <ActivityIndicator color={DodoColors.brand} />
+        ) : blocked.length === 0 ? (
+          <Text style={styles.emptyText}>차단 목록이 비어 있어요.</Text>
         ) : (
-          MOCK_BLOCKED.map((entry) => (
-            <View key={entry.id} style={styles.requestRow}>
-              <Text style={styles.requestPetName}>{entry.petName}</Text>
+          blocked.map((entry) => (
+            <View key={`${entry.petId}-${entry.userId}`} style={styles.requestRow}>
+              <Text style={styles.requestPetName}>
+                {entry.userName} → {entry.petName}
+              </Text>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => unblockMutation.mutate({ petId: entry.petId, targetUserId: entry.userId })}
+              >
+                <Text style={styles.actionButtonText}>차단 해제</Text>
+              </TouchableOpacity>
             </View>
           ))
         )}
@@ -158,9 +256,15 @@ const styles = StyleSheet.create({
   requestRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: DodoColors.background,
+    gap: 8,
+  },
+  requestTextCol: {
+    flex: 1,
+    gap: 2,
   },
   requestPetName: {
     fontSize: 13,
@@ -170,5 +274,29 @@ const styles = StyleSheet.create({
   requestDate: {
     fontSize: 11,
     color: DodoColors.fenceIdleLabel,
+  },
+  requestActions: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  actionButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: DodoColors.border,
+  },
+  actionButtonText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: DodoColors.textSecondary,
+  },
+  actionButtonDanger: {
+    borderColor: DodoColors.fenceOutside,
+  },
+  actionButtonDangerText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: DodoColors.fenceOutside,
   },
 });

@@ -1,31 +1,63 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'expo-router';
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 import { DodoColors } from '@/constants/theme';
+import { getFamilyApplications, joinFamily, type FamilyApplicationStatus } from '@/shared/api/familyApi';
 
-import { MOCK_SENT_REQUESTS, type SentRequestStatus } from './_mock';
+type FilterLabel = '전체' | '승인 대기' | '거절됨';
+const FILTERS: FilterLabel[] = ['전체', '승인 대기', '거절됨'];
+const FILTER_STATUS: Record<FilterLabel, FamilyApplicationStatus | undefined> = {
+  전체: undefined,
+  '승인 대기': 'PENDING',
+  거절됨: 'REJECTED',
+};
 
-const FILTERS: ('전체' | SentRequestStatus)[] = ['전체', '승인 대기', '거절됨'];
+function statusLabel(status: FamilyApplicationStatus): string {
+  if (status === 'PENDING') return '승인 대기';
+  if (status === 'APPROVED') return '승인됨';
+  if (status === 'REJECTED') return '거절됨';
+  return '차단됨';
+}
 
-function statusStyle(status: SentRequestStatus) {
-  if (status === '거절됨') return { bg: '#fee2e2', color: DodoColors.fenceOutside };
-  if (status === '승인됨') return { bg: '#dcfce7', color: DodoColors.fenceActiveLabel };
+function statusStyle(status: FamilyApplicationStatus) {
+  if (status === 'REJECTED' || status === 'BLOCKED') return { bg: '#fee2e2', color: DodoColors.fenceOutside };
+  if (status === 'APPROVED') return { bg: '#dcfce7', color: DodoColors.fenceActiveLabel };
   return { bg: DodoColors.background, color: DodoColors.fenceIdleLabel };
 }
 
 export default function FamilyApplyScreen() {
+  const queryClient = useQueryClient();
   const [code, setCode] = useState('');
-  const [filter, setFilter] = useState<(typeof FILTERS)[number]>('전체');
+  const [filter, setFilter] = useState<FilterLabel>('전체');
 
-  const filteredRequests = MOCK_SENT_REQUESTS.filter((r) => filter === '전체' || r.status === filter);
+  const applicationsQuery = useQuery({
+    queryKey: ['family', 'applications', filter],
+    queryFn: () => getFamilyApplications(FILTER_STATUS[filter], 0, 20),
+  });
 
-  const handleApply = () => {
-    if (!code.trim()) return;
-    Alert.alert('가족 신청', '가족 신청 기능은 준비 중이에요.');
-    setCode('');
-  };
+  const applyMutation = useMutation({
+    mutationFn: () => joinFamily(code.trim()),
+    onSuccess: () => {
+      setCode('');
+      queryClient.invalidateQueries({ queryKey: ['family', 'applications'] });
+      Alert.alert('가족 신청', '가족 신청을 보냈어요.');
+    },
+    onError: () => Alert.alert('오류', '가족 신청에 실패했어요. 코드를 다시 확인해주세요.'),
+  });
+
+  const applications = applicationsQuery.data?.applications ?? [];
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -52,10 +84,16 @@ export default function FamilyApplyScreen() {
             placeholder="가족 코드 입력"
             placeholderTextColor={DodoColors.fenceIdleLabel}
             value={code}
-            onChangeText={setCode}
+            onChangeText={(text) => setCode(text.toUpperCase())}
+            autoCapitalize="characters"
+            maxLength={6}
           />
-          <TouchableOpacity style={styles.primaryButton} onPress={handleApply}>
-            <Text style={styles.primaryButtonText}>가족 신청</Text>
+          <TouchableOpacity
+            style={styles.primaryButton}
+            disabled={!code.trim() || applyMutation.isPending}
+            onPress={() => applyMutation.mutate()}
+          >
+            <Text style={styles.primaryButtonText}>{applyMutation.isPending ? '신청 중...' : '가족 신청'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -79,13 +117,15 @@ export default function FamilyApplyScreen() {
           </View>
         </View>
 
-        {filteredRequests.length === 0 ? (
+        {applicationsQuery.isLoading ? (
+          <ActivityIndicator color={DodoColors.brand} />
+        ) : applications.length === 0 ? (
           <Text style={styles.emptyText}>표시할 신청 내역이 없어요.</Text>
         ) : (
-          filteredRequests.map((request) => {
+          applications.map((request) => {
             const style = statusStyle(request.status);
             return (
-              <View key={request.id} style={styles.requestRow}>
+              <View key={request.applicationId} style={styles.requestRow}>
                 <View style={styles.requestAvatar}>
                   <Ionicons name="paw" size={16} color={DodoColors.brandForeground} />
                 </View>
@@ -93,11 +133,12 @@ export default function FamilyApplyScreen() {
                   <View style={styles.requestNameRow}>
                     <Text style={styles.requestPetName}>{request.petName}</Text>
                     <View style={[styles.statusBadge, { backgroundColor: style.bg }]}>
-                      <Text style={[styles.statusBadgeText, { color: style.color }]}>{request.status}</Text>
+                      <Text style={[styles.statusBadgeText, { color: style.color }]}>
+                        {statusLabel(request.status)}
+                      </Text>
                     </View>
                   </View>
-                  <Text style={styles.requestMessage}>{request.message}</Text>
-                  <Text style={styles.requestDate}>{request.sentAt}</Text>
+                  <Text style={styles.requestDate}>{request.appliedAt}</Text>
                 </View>
               </View>
             );
@@ -263,10 +304,6 @@ const styles = StyleSheet.create({
   statusBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-  },
-  requestMessage: {
-    fontSize: 12,
-    color: DodoColors.textSecondary,
   },
   requestDate: {
     fontSize: 10,

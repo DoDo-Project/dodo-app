@@ -1,25 +1,65 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Image } from 'expo-image';
 import { Link } from 'expo-router';
-import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { DodoColors } from '@/constants/theme';
-
-import { MOCK_PETS } from '../pets/_mock';
-import { MOCK_FAMILY_MEMBERS, MOCK_RECEIVED_REQUESTS } from './_mock';
-
-function genderLabel(gender: 'F' | 'M' | null) {
-  if (gender === 'F') return '암컷';
-  if (gender === 'M') return '수컷';
-  return '미상';
-}
+import { createInvitationCode, getPendingUsers } from '@/shared/api/familyApi';
+import { getPetDetail, getPetsList } from '@/shared/api/petApi';
+import { getInvitationCode, saveInvitationCode } from '@/shared/lib/family/invitationCodeCache';
 
 export default function FamilyScreen() {
-  const [selectedPetId, setSelectedPetId] = useState(MOCK_PETS[0]?.id ?? '');
-  const selectedPet = MOCK_PETS.find((p) => p.id === selectedPetId) ?? null;
-  const members = selectedPet ? (MOCK_FAMILY_MEMBERS[selectedPet.id] ?? []) : [];
+  const petsQuery = useQuery({ queryKey: ['pets', 'list'], queryFn: () => getPetsList(0, 10) });
+  const pets = useMemo(() => petsQuery.data?.pets ?? [], [petsQuery.data]);
 
-  if (MOCK_PETS.length === 0 || !selectedPet) {
+  const [selectedPetId, setSelectedPetId] = useState<number | null>(null);
+  useEffect(() => {
+    if (selectedPetId === null && pets.length > 0) setSelectedPetId(pets[0].petId);
+  }, [pets, selectedPetId]);
+
+  const petDetailQuery = useQuery({
+    queryKey: ['pets', selectedPetId],
+    queryFn: () => getPetDetail(selectedPetId as number),
+    enabled: selectedPetId !== null,
+  });
+
+  const pendingQuery = useQuery({
+    queryKey: ['family', 'pending-users'],
+    queryFn: () => getPendingUsers('PENDING'),
+  });
+
+  const receivedCount = (pendingQuery.data?.users ?? []).filter((u) => u.petId === selectedPetId).length;
+
+  const [cachedCode, setCachedCode] = useState<{ code: string; expiresAt: number } | null>(null);
+  useEffect(() => {
+    if (selectedPetId === null) return;
+    getInvitationCode(selectedPetId).then(setCachedCode);
+  }, [selectedPetId]);
+
+  const inviteMutation = useMutation({
+    mutationFn: () => createInvitationCode(selectedPetId as number),
+    onSuccess: async ({ code, expiresIn }) => {
+      await saveInvitationCode(selectedPetId as number, code, expiresIn);
+      setCachedCode({ code, expiresAt: Date.now() + expiresIn * 1000 });
+      Alert.alert('초대 코드 발급', `${selectedPet?.name}의 초대 코드가 발급됐어요.\n\n${code}`);
+    },
+    onError: () => Alert.alert('오류', '초대 코드를 발급하지 못했어요.'),
+  });
+
+  const selectedPet = pets.find((p) => p.petId === selectedPetId) ?? null;
+  const members = petDetailQuery.data?.familyMembers ?? [];
+
+  if (petsQuery.isLoading) {
+    return (
+      <View style={styles.emptyContainer}>
+        <ActivityIndicator color={DodoColors.brand} />
+      </View>
+    );
+  }
+
+  if (pets.length === 0 || !selectedPet) {
     return (
       <View style={styles.emptyContainer}>
         <Ionicons name="paw-outline" size={40} color={DodoColors.fenceIdleLabel} />
@@ -33,11 +73,6 @@ export default function FamilyScreen() {
     );
   }
 
-  const handleCreateInviteCode = () => {
-    const code = Math.random().toString(36).slice(2, 8).toUpperCase();
-    Alert.alert('초대 코드 발급', `${selectedPet.name}의 초대 코드가 발급됐어요.\n\n${code}\n\n15분간 유효합니다.`);
-  };
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.eyebrow}>FAMILY</Text>
@@ -47,13 +82,13 @@ export default function FamilyScreen() {
         <Text style={styles.infoLabel}>SELECT PET</Text>
         <Text style={styles.sectionHint}>가족을 관리할 반려동물을 선택해 주세요</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-          {MOCK_PETS.map((pet) => {
-            const selected = pet.id === selectedPetId;
+          {pets.map((pet) => {
+            const selected = pet.petId === selectedPetId;
             return (
               <TouchableOpacity
-                key={pet.id}
+                key={pet.petId}
                 style={[styles.chip, selected && styles.chipSelected]}
-                onPress={() => setSelectedPetId(pet.id)}
+                onPress={() => setSelectedPetId(pet.petId)}
               >
                 <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{pet.name}</Text>
               </TouchableOpacity>
@@ -74,15 +109,15 @@ export default function FamilyScreen() {
                 <Text style={styles.familyCountBadgeText}>가족 {members.length}명</Text>
               </View>
             </View>
+            <Text style={styles.petMeta}>만 {selectedPet.age}세</Text>
             <Text style={styles.petMeta}>
-              {selectedPet.birthDate} ({selectedPet.ageLabel})
+              {selectedPet.species === 'CANINE' ? '강아지' : '고양이'} {selectedPet.breed}
             </Text>
-            <Text style={styles.petMeta}>
-              {selectedPet.species} {selectedPet.breed}
-            </Text>
-            <Text style={styles.petMeta}>성별 {genderLabel(selectedPet.gender)}</Text>
           </View>
-          <Link href={{ pathname: '/(tabs)/mypage/pets/[petId]', params: { petId: selectedPet.id } }} asChild>
+          <Link
+            href={{ pathname: '/(tabs)/mypage/pets/[petId]', params: { petId: String(selectedPet.petId) } }}
+            asChild
+          >
             <TouchableOpacity style={styles.outlineButton}>
               <Text style={styles.outlineButtonText}>상세정보</Text>
             </TouchableOpacity>
@@ -92,14 +127,26 @@ export default function FamilyScreen() {
 
       <View style={styles.card}>
         <Text style={styles.infoLabel}>가족 구성원</Text>
-        {members.map((member) => (
-          <View key={member.id} style={styles.memberRow}>
-            <View style={styles.memberAvatar}>
-              <Ionicons name="person" size={14} color={DodoColors.brandForeground} />
-            </View>
-            <Text style={styles.memberName}>{member.name}</Text>
+        {members.length === 0 ? (
+          <Text style={styles.hintText}>아직 가족 구성원이 없어요.</Text>
+        ) : (
+          <View style={styles.memberGrid}>
+            {members.map((member) => (
+              <View key={member.userId} style={styles.memberItem}>
+                {member.profileImageUrl ? (
+                  <Image source={{ uri: member.profileImageUrl }} style={styles.memberAvatarImage} contentFit="cover" />
+                ) : (
+                  <View style={styles.memberAvatar}>
+                    <Ionicons name="person" size={20} color={DodoColors.brandForeground} />
+                  </View>
+                )}
+                <Text style={styles.memberName} numberOfLines={1}>
+                  {member.userName}
+                </Text>
+              </View>
+            ))}
           </View>
-        ))}
+        )}
       </View>
 
       <View style={styles.cardRow}>
@@ -125,9 +172,7 @@ export default function FamilyScreen() {
             </Link>
           </View>
           <Text style={styles.hintText}>
-            {MOCK_RECEIVED_REQUESTS.length === 0
-              ? '아직 받은 신청이 없어요.'
-              : `${MOCK_RECEIVED_REQUESTS.length}건의 신청이 있어요.`}
+            {receivedCount === 0 ? '아직 받은 신청이 없어요.' : `${receivedCount}건의 신청이 있어요.`}
           </Text>
         </View>
       </View>
@@ -135,11 +180,22 @@ export default function FamilyScreen() {
       <View style={styles.card}>
         <Text style={styles.infoLabel}>초대 코드 발급</Text>
         <Text style={styles.hintText}>
-          선택한 반려동물 기준으로 초대 코드를 발급할 수 있어요.{'\n'}생성된 코드는 15분 동안 유효하고, 같은 코드로 가족
-          신청을 받을 수 있어요.
+          선택한 반려동물 기준으로 초대 코드를 발급할 수 있어요.{'\n'}발급된 코드는 만료 전까지 이 화면에서 다시 볼 수
+          있어요.
         </Text>
-        <TouchableOpacity style={styles.primaryButton} onPress={handleCreateInviteCode}>
-          <Text style={styles.primaryButtonText}>초대 코드 만들기</Text>
+        {cachedCode && (
+          <View style={styles.codeBox}>
+            <Text style={styles.codeText}>{cachedCode.code}</Text>
+          </View>
+        )}
+        <TouchableOpacity
+          style={styles.primaryButton}
+          disabled={inviteMutation.isPending}
+          onPress={() => inviteMutation.mutate()}
+        >
+          <Text style={styles.primaryButtonText}>
+            {inviteMutation.isPending ? '발급 중...' : cachedCode ? '초대 코드 다시 만들기' : '초대 코드 만들기'}
+          </Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -272,22 +328,34 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: DodoColors.textSecondary,
   },
-  memberRow: {
+  memberGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+  memberItem: {
+    width: 56,
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
   },
   memberAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: DodoColors.brand,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  memberAvatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: DodoColors.background,
+  },
   memberName: {
-    fontSize: 13,
+    fontSize: 11,
     color: DodoColors.textPrimary,
+    textAlign: 'center',
   },
   cardHeaderRow: {
     flexDirection: 'row',
@@ -303,6 +371,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 16,
     color: DodoColors.fenceIdleLabel,
+  },
+  codeBox: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: DodoColors.background,
+    borderWidth: 1,
+    borderColor: DodoColors.border,
+  },
+  codeText: {
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 2,
+    color: DodoColors.textPrimary,
   },
   primaryButton: {
     alignSelf: 'flex-start',

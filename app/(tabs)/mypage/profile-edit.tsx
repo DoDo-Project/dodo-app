@@ -1,31 +1,73 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
+import { RegionSelectModal } from '@/components/auth/region-select-modal';
+import { AvatarImagePicker } from '@/components/common/avatar-image-picker';
 import { DodoColors } from '@/constants/theme';
-
-// TODO(이슈4): GET /users/me, PATCH /users/me, PUT /users/me/profile, DELETE /users/me 연동 후 mock 제거
-const MOCK_ACCOUNT = {
-  email: 'csb7543@naver.com',
-  name: '조수빈',
-  nickname: '조펭이',
-  region: '서울특별시 서대문구',
-};
+import { getMe, updateMe } from '@/shared/api/userApi';
+import { useAuthStore } from '@/shared/lib/auth/authStore';
 
 export default function ProfileEditScreen() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const updateProfile = useAuthStore((state) => state.updateProfile);
   const [nickname, setNickname] = useState('');
   const [region, setRegion] = useState('');
+  const [regionModalVisible, setRegionModalVisible] = useState(false);
+  const [profileUrl, setProfileUrl] = useState<string | null>(null);
 
-  const handleSave = () => {
-    Alert.alert('저장 완료', '변경사항이 저장됐어요.');
-  };
+  const meQuery = useQuery({ queryKey: ['users', 'me'], queryFn: getMe });
+
+  useEffect(() => {
+    if (meQuery.data) setProfileUrl(meQuery.data.profileUrl);
+  }, [meQuery.data]);
+
+  const saveMutation = useMutation({
+    mutationFn: () => {
+      if (!meQuery.data) throw new Error('not loaded');
+      return updateMe({
+        nickname: nickname.trim() || meQuery.data.nickname,
+        region: region.trim() || meQuery.data.region,
+        hasFamily: meQuery.data.hasFamily,
+        profileUrl,
+      });
+    },
+    onSuccess: () => {
+      updateProfile({
+        nickname: nickname.trim() || meQuery.data?.nickname,
+        region: region.trim() || meQuery.data?.region,
+        profileUrl,
+      });
+      queryClient.invalidateQueries({ queryKey: ['users', 'me'] });
+      Alert.alert('저장 완료', '변경사항이 저장됐어요.');
+      setNickname('');
+      setRegion('');
+    },
+    onError: () => Alert.alert('오류', '저장에 실패했어요. 잠시 후 다시 시도해주세요.'),
+  });
 
   const handleWithdrawal = () => {
-    Alert.alert('회원 탈퇴', '탈퇴하면 계정과 모든 데이터가 삭제되며 되돌릴 수 없어요. 계속하시겠어요?', [
-      { text: '취소', style: 'cancel' },
-      { text: '탈퇴하기', style: 'destructive' },
-    ]);
+    router.push('/(tabs)/mypage/withdrawal');
   };
+
+  if (meQuery.isLoading || !meQuery.data) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator color={DodoColors.brand} />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -34,20 +76,7 @@ export default function ProfileEditScreen() {
 
       <View style={styles.card}>
         <View style={styles.imageRow}>
-          <View style={styles.avatar}>
-            <Ionicons name="paw" size={28} color={DodoColors.brandForeground} />
-          </View>
-          <View style={styles.imageTextCol}>
-            <View style={styles.imageBadgeRow}>
-              <Text style={styles.imageBadge}>최대 10MB</Text>
-            </View>
-            <Text style={styles.imageHint}>사진을 선택해 프로필 이미지를 변경할 수 있어요.</Text>
-            <Text style={styles.imageHint}>변경한 이미지는 저장 후 바로 반영돼요.</Text>
-            {/* TODO(이슈7): expo-image-picker 설치 후 실제 첨부 연동 */}
-            <TouchableOpacity style={styles.imageButton}>
-              <Text style={styles.imageButtonText}>이미지 변경</Text>
-            </TouchableOpacity>
-          </View>
+          <AvatarImagePicker imageUrl={profileUrl} onUploaded={setProfileUrl} size={64} />
         </View>
       </View>
 
@@ -61,13 +90,13 @@ export default function ProfileEditScreen() {
           <View style={styles.fieldHalf}>
             <Text style={styles.label}>이메일</Text>
             <View style={styles.readonlyInput}>
-              <Text style={styles.readonlyValue}>{MOCK_ACCOUNT.email}</Text>
+              <Text style={styles.readonlyValue}>{meQuery.data.email}</Text>
             </View>
           </View>
           <View style={styles.fieldHalf}>
             <Text style={styles.label}>이름</Text>
             <View style={styles.readonlyInput}>
-              <Text style={styles.readonlyValue}>{MOCK_ACCOUNT.name}</Text>
+              <Text style={styles.readonlyValue}>{meQuery.data.name}</Text>
             </View>
           </View>
         </View>
@@ -77,7 +106,7 @@ export default function ProfileEditScreen() {
             <Text style={styles.label}>닉네임 *</Text>
             <TextInput
               style={styles.input}
-              placeholder={MOCK_ACCOUNT.nickname}
+              placeholder={meQuery.data.nickname}
               placeholderTextColor={DodoColors.fenceIdleLabel}
               value={nickname}
               onChangeText={setNickname}
@@ -86,21 +115,28 @@ export default function ProfileEditScreen() {
           </View>
           <View style={styles.fieldHalf}>
             <Text style={styles.label}>활동 지역 *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder={MOCK_ACCOUNT.region}
-              placeholderTextColor={DodoColors.fenceIdleLabel}
-              value={region}
-              onChangeText={setRegion}
-            />
-            <Text style={styles.fieldHint}>검색해서 활동 지역을 선택해주세요.</Text>
+            <TouchableOpacity style={styles.readonlyInput} onPress={() => setRegionModalVisible(true)}>
+              <Text style={region ? styles.readonlyValue : styles.fieldHint}>{region || meQuery.data.region}</Text>
+            </TouchableOpacity>
+            <Text style={styles.fieldHint}>눌러서 활동 지역을 선택해주세요.</Text>
           </View>
         </View>
 
+        <RegionSelectModal
+          visible={regionModalVisible}
+          initialRegion={region || meQuery.data.region}
+          onClose={() => setRegionModalVisible(false)}
+          onConfirm={setRegion}
+        />
+
         <Text style={styles.requiredHint}>* 표시된 항목은 필수 입력값입니다.</Text>
 
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>변경사항 저장</Text>
+        <TouchableOpacity
+          style={styles.saveButton}
+          disabled={saveMutation.isPending}
+          onPress={() => saveMutation.mutate()}
+        >
+          <Text style={styles.saveButtonText}>{saveMutation.isPending ? '저장 중...' : '변경사항 저장'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -119,6 +155,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: DodoColors.background,
+  },
+  centerContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   content: {
     padding: 16,

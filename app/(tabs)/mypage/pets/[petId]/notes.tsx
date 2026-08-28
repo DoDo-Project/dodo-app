@@ -1,47 +1,105 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 import { DodoColors } from '@/constants/theme';
+import {
+  createSignificantNote,
+  deleteSignificantNote,
+  getPetDetail,
+  getSignificantNotes,
+  NOTE_TYPES,
+  updateSignificantNote,
+  type NoteType,
+} from '@/shared/api/petApi';
 
-import { MOCK_NOTES, MOCK_PETS, NOTE_CATEGORIES, type NoteCategory, type SignificantNote } from '../_mock';
+const CATEGORY_LABEL: Record<NoteType, string> = {
+  ALLERGY: '알레르기',
+  HOSPITAL: '병원',
+  MEDICATION: '약물',
+  FOOD: '음식',
+  BEHAVIOR: '행동',
+  SYMPTOM: '증상',
+  ETC: '기타',
+};
 
-const TAG_COLORS: Record<NoteCategory, string> = {
-  알레르기: '#fdead9',
-  병원: '#e0f2fe',
-  약물: '#fdead9',
-  음식: '#fef9c3',
-  행동: '#ede9fe',
-  증상: '#fee2e2',
-  기타: DodoColors.background,
+const TAG_COLORS: Record<NoteType, string> = {
+  ALLERGY: '#fdead9',
+  HOSPITAL: '#e0f2fe',
+  MEDICATION: '#fdead9',
+  FOOD: '#fef9c3',
+  BEHAVIOR: '#ede9fe',
+  SYMPTOM: '#fee2e2',
+  ETC: DodoColors.background,
 };
 
 export default function PetNotesScreen() {
   const { petId } = useLocalSearchParams<{ petId: string }>();
   const router = useRouter();
-  const pet = MOCK_PETS.find((p) => p.id === petId) ?? MOCK_PETS[0];
-  const [notes, setNotes] = useState<SignificantNote[]>(MOCK_NOTES[pet.id] ?? []);
+  const queryClient = useQueryClient();
+
+  const petQuery = useQuery({ queryKey: ['pets', petId], queryFn: () => getPetDetail(petId), enabled: !!petId });
+  const notesQuery = useQuery({
+    queryKey: ['pets', petId, 'notes'],
+    queryFn: () => getSignificantNotes(petId, 0, 10),
+    enabled: !!petId,
+  });
+
   const [content, setContent] = useState('');
-  const [category, setCategory] = useState<NoteCategory>('알레르기');
+  const [category, setCategory] = useState<NoteType>('ALLERGY');
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [filter, setFilter] = useState<'전체' | NoteCategory>('전체');
+  const [filter, setFilter] = useState<'전체' | NoteType>('전체');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingContent, setEditingContent] = useState('');
+  const [editingCategory, setEditingCategory] = useState<NoteType>('ALLERGY');
 
-  const filteredNotes = notes.filter((n) => filter === '전체' || n.tag === filter);
-
-  const handleAdd = () => {
-    if (!content.trim()) return;
-    const today = new Date().toISOString().slice(0, 10);
-    setNotes((prev) => [{ id: `note-${Date.now()}`, tag: category, date: today, content: content.trim() }, ...prev]);
-    setContent('');
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['pets', petId, 'notes'] });
+    queryClient.invalidateQueries({ queryKey: ['pets', petId] });
   };
 
-  const handleDelete = (id: string) => {
-    setNotes((prev) => prev.filter((n) => n.id !== id));
-  };
+  const addMutation = useMutation({
+    mutationFn: () => createSignificantNote(Number(petId), content.trim(), category),
+    onSuccess: () => {
+      setContent('');
+      invalidate();
+    },
+    onError: () => Alert.alert('오류', '특이사항을 추가하지 못했어요.'),
+  });
 
-  const handleEdit = () => {
-    Alert.alert('수정', '특이사항 수정 기능은 준비 중이에요.');
+  const updateMutation = useMutation({
+    mutationFn: (id: number) => updateSignificantNote(id, editingContent.trim(), editingCategory),
+    onSuccess: () => {
+      setEditingId(null);
+      invalidate();
+    },
+    onError: () => Alert.alert('오류', '특이사항을 수정하지 못했어요.'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteSignificantNote(id),
+    onSuccess: invalidate,
+    onError: () => Alert.alert('오류', '특이사항을 삭제하지 못했어요.'),
+  });
+
+  const notes = notesQuery.data?.notes ?? [];
+  const filteredNotes = notes.filter((n) => filter === '전체' || n.noteType === filter);
+
+  const startEdit = (noteId: number, noteContent: string, noteType: NoteType) => {
+    setEditingId(noteId);
+    setEditingContent(noteContent);
+    setEditingCategory(noteType);
   };
 
   return (
@@ -58,24 +116,26 @@ export default function PetNotesScreen() {
 
       <View style={styles.card}>
         <View style={styles.petNameRow}>
-          <Text style={styles.petName}>{pet.name}</Text>
+          <Text style={styles.petName}>{petQuery.data?.petName ?? ''}</Text>
           <View style={styles.countBadge}>
             <Text style={styles.countBadgeText}>총 {notes.length}개</Text>
           </View>
         </View>
-        <Text style={styles.hintText}>{pet.name}의 특이사항을 정리하고 필요한 메모를 추가하거나 수정할 수 있어요.</Text>
+        <Text style={styles.hintText}>
+          {petQuery.data?.petName ?? '반려동물'}의 특이사항을 정리하고 필요한 메모를 추가하거나 수정할 수 있어요.
+        </Text>
       </View>
 
       <View style={[styles.card, styles.addCard]}>
         <View style={styles.addRow}>
           <View style={styles.pickerWrap}>
             <TouchableOpacity style={styles.picker} onPress={() => setPickerOpen((v) => !v)}>
-              <Text style={styles.pickerText}>{category}</Text>
+              <Text style={styles.pickerText}>{CATEGORY_LABEL[category]}</Text>
               <Ionicons name={pickerOpen ? 'chevron-up' : 'chevron-down'} size={14} color={DodoColors.textSecondary} />
             </TouchableOpacity>
             {pickerOpen && (
               <View style={styles.pickerOptions}>
-                {NOTE_CATEGORIES.map((option) => (
+                {NOTE_TYPES.map((option) => (
                   <TouchableOpacity
                     key={option}
                     style={styles.pickerOption}
@@ -84,7 +144,7 @@ export default function PetNotesScreen() {
                       setPickerOpen(false);
                     }}
                   >
-                    <Text style={styles.pickerOptionText}>{option}</Text>
+                    <Text style={styles.pickerOptionText}>{CATEGORY_LABEL[option]}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -97,7 +157,11 @@ export default function PetNotesScreen() {
             value={content}
             onChangeText={setContent}
           />
-          <TouchableOpacity style={styles.addButton} onPress={handleAdd}>
+          <TouchableOpacity
+            style={styles.addButton}
+            disabled={!content.trim() || addMutation.isPending}
+            onPress={() => addMutation.mutate()}
+          >
             <Text style={styles.addButtonText}>추가</Text>
           </TouchableOpacity>
         </View>
@@ -105,45 +169,80 @@ export default function PetNotesScreen() {
 
       <View style={styles.card}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-          {(['전체', ...NOTE_CATEGORIES] as const).map((f) => {
+          {(['전체', ...NOTE_TYPES] as const).map((f) => {
             const selected = f === filter;
+            const label = f === '전체' ? '전체' : CATEGORY_LABEL[f];
             return (
               <TouchableOpacity
                 key={f}
                 style={[styles.filterChip, selected && styles.filterChipSelected]}
                 onPress={() => setFilter(f)}
               >
-                <Text style={[styles.filterChipText, selected && styles.filterChipTextSelected]}>{f}</Text>
+                <Text style={[styles.filterChipText, selected && styles.filterChipTextSelected]}>{label}</Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
 
-        {filteredNotes.length === 0 ? (
+        {notesQuery.isLoading ? (
+          <ActivityIndicator color={DodoColors.brand} />
+        ) : filteredNotes.length === 0 ? (
           <Text style={styles.emptyText}>등록된 특이사항이 없어요.</Text>
         ) : (
-          filteredNotes.map((note, index) => (
-            <View key={note.id} style={[styles.noteRow, index === filteredNotes.length - 1 && styles.noteRowLast]}>
-              <View style={[styles.noteTag, { backgroundColor: TAG_COLORS[note.tag] }]}>
-                <Text style={styles.noteTagText}>{note.tag}</Text>
+          filteredNotes.map((note, index) => {
+            const isEditing = editingId === note.noteId;
+            return (
+              <View
+                key={note.noteId}
+                style={[styles.noteRow, index === filteredNotes.length - 1 && styles.noteRowLast]}
+              >
+                {isEditing ? (
+                  <>
+                    <TextInput
+                      style={[styles.input, styles.editInput]}
+                      value={editingContent}
+                      onChangeText={setEditingContent}
+                    />
+                    <View style={styles.noteActions}>
+                      <TouchableOpacity
+                        style={styles.noteActionButton}
+                        onPress={() => updateMutation.mutate(note.noteId)}
+                      >
+                        <Text style={styles.noteActionText}>저장</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.noteActionButton} onPress={() => setEditingId(null)}>
+                        <Text style={styles.noteActionText}>취소</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <View style={[styles.noteTag, { backgroundColor: TAG_COLORS[note.noteType] }]}>
+                      <Text style={styles.noteTagText}>{CATEGORY_LABEL[note.noteType]}</Text>
+                    </View>
+                    <View style={styles.noteContentCol}>
+                      <Text style={styles.noteDate}>{note.createdAt?.slice(0, 10)}</Text>
+                      <Text style={styles.noteContent}>{note.noteContent}</Text>
+                    </View>
+                    <View style={styles.noteActions}>
+                      <TouchableOpacity
+                        style={styles.noteActionButton}
+                        onPress={() => startEdit(note.noteId, note.noteContent, note.noteType)}
+                      >
+                        <Text style={styles.noteActionText}>수정</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.noteActionButton, styles.noteDeleteButton]}
+                        onPress={() => deleteMutation.mutate(note.noteId)}
+                      >
+                        <Text style={styles.noteDeleteText}>삭제</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
               </View>
-              <View style={styles.noteContentCol}>
-                <Text style={styles.noteDate}>{note.date}</Text>
-                <Text style={styles.noteContent}>{note.content}</Text>
-              </View>
-              <View style={styles.noteActions}>
-                <TouchableOpacity style={styles.noteActionButton} onPress={handleEdit}>
-                  <Text style={styles.noteActionText}>수정</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.noteActionButton, styles.noteDeleteButton]}
-                  onPress={() => handleDelete(note.id)}
-                >
-                  <Text style={styles.noteDeleteText}>삭제</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
+            );
+          })
         )}
       </View>
     </ScrollView>
@@ -278,6 +377,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     fontSize: 12,
     color: DodoColors.textPrimary,
+  },
+  editInput: {
+    marginRight: 8,
   },
   addButton: {
     paddingHorizontal: 16,

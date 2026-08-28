@@ -1,20 +1,35 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'expo-router';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { DodoColors } from '@/constants/theme';
+import { getPetsList, type PetSex } from '@/shared/api/petApi';
 
-import { MOCK_PETS, type Pet } from './_mock';
-
-function GenderIcon({ gender }: { gender: Pet['gender'] }) {
-  if (!gender) return null;
+function GenderIcon({ sex }: { sex: PetSex }) {
+  if (sex === 'NEUTER') return null;
   return (
-    <Ionicons name={gender === 'F' ? 'female' : 'male'} size={14} color={gender === 'F' ? '#ec4899' : '#3b82f6'} />
+    <Ionicons name={sex === 'FEMALE' ? 'female' : 'male'} size={14} color={sex === 'FEMALE' ? '#ec4899' : '#3b82f6'} />
   );
 }
 
+function speciesLabel(species: 'CANINE' | 'FELINE') {
+  return species === 'CANINE' ? '강아지' : '고양이';
+}
+
 export default function PetListScreen() {
-  if (MOCK_PETS.length === 0) {
+  const petsQuery = useQuery({ queryKey: ['pets', 'list'], queryFn: () => getPetsList(0, 10) });
+  const pets = petsQuery.data?.pets ?? [];
+
+  if (petsQuery.isLoading) {
+    return (
+      <View style={styles.emptyContainer}>
+        <ActivityIndicator color={DodoColors.brand} />
+      </View>
+    );
+  }
+
+  if (pets.length === 0) {
     return (
       <View style={styles.emptyContainer}>
         <Ionicons name="paw-outline" size={40} color={DodoColors.fenceIdleLabel} />
@@ -37,7 +52,7 @@ export default function PetListScreen() {
         </View>
         <View style={styles.topRowRight}>
           <View style={styles.countBadge}>
-            <Text style={styles.countBadgeText}>총 {MOCK_PETS.length}마리</Text>
+            <Text style={styles.countBadgeText}>총 {pets.length}마리</Text>
           </View>
           <Link href="/(tabs)/mypage/pets/new" asChild>
             <TouchableOpacity style={styles.addButton}>
@@ -47,30 +62,31 @@ export default function PetListScreen() {
         </View>
       </View>
 
-      {MOCK_PETS.map((pet) => (
-        <View key={pet.id} style={styles.petCard}>
+      {pets.map((pet) => (
+        <View key={pet.petId} style={styles.petCard}>
           <View style={styles.petAvatar}>
             <Ionicons name="paw" size={24} color={DodoColors.brandForeground} />
           </View>
           <View style={styles.petInfo}>
             <View style={styles.petNameRow}>
               <Text style={styles.petName}>{pet.name}</Text>
-              <GenderIcon gender={pet.gender} />
+              <GenderIcon sex={pet.sex} />
             </View>
+            <Text style={styles.petMeta}>만 {pet.age}세</Text>
             <Text style={styles.petMeta}>
-              {pet.birthDate} ({pet.ageLabel})
-            </Text>
-            <Text style={styles.petMeta}>
-              {pet.species} {pet.breed}
+              {speciesLabel(pet.species)} {pet.breed}
             </Text>
           </View>
           <View style={styles.petActions}>
-            <Link href={{ pathname: '/(tabs)/mypage/pets/[petId]', params: { petId: pet.id } }} asChild>
+            <Link href={{ pathname: '/(tabs)/mypage/pets/[petId]', params: { petId: String(pet.petId) } }} asChild>
               <TouchableOpacity style={styles.petActionButton}>
                 <Text style={styles.petActionText}>상세 정보</Text>
               </TouchableOpacity>
             </Link>
-            <Link href={{ pathname: '/(tabs)/mypage/pets/[petId]/weight', params: { petId: pet.id } }} asChild>
+            <Link
+              href={{ pathname: '/(tabs)/mypage/pets/[petId]/weight', params: { petId: String(pet.petId) } }}
+              asChild
+            >
               <TouchableOpacity style={styles.petActionButton}>
                 <Text style={styles.petActionText}>체중 관리</Text>
               </TouchableOpacity>

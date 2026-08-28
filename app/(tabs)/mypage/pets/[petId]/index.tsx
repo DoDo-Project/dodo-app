@@ -1,25 +1,66 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Image } from 'expo-image';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { DodoColors } from '@/constants/theme';
+import { getPetDetail, getWeightHistory, leavePetFamily } from '@/shared/api/petApi';
 
-import { MOCK_NOTES, MOCK_PETS, MOCK_WEIGHT_RECORDS } from '../_mock';
+const NOTE_TYPE_LABEL: Record<string, string> = {
+  ALLERGY: '알레르기',
+  HOSPITAL: '병원',
+  MEDICATION: '약물',
+  FOOD: '음식',
+  BEHAVIOR: '행동',
+  SYMPTOM: '증상',
+  ETC: '기타',
+};
+
+function speciesLabel(species: 'CANINE' | 'FELINE') {
+  return species === 'CANINE' ? '강아지' : '고양이';
+}
 
 export default function PetDetailScreen() {
   const { petId } = useLocalSearchParams<{ petId: string }>();
   const router = useRouter();
-  const pet = MOCK_PETS.find((p) => p.id === petId) ?? MOCK_PETS[0];
-  const weightRecords = MOCK_WEIGHT_RECORDS[pet.id] ?? [];
-  const latestWeight = weightRecords[0];
-  const notes = MOCK_NOTES[pet.id] ?? [];
+  const queryClient = useQueryClient();
+
+  const petQuery = useQuery({ queryKey: ['pets', petId], queryFn: () => getPetDetail(petId), enabled: !!petId });
+  const weightQuery = useQuery({
+    queryKey: ['pets', petId, 'weight', 'preview'],
+    queryFn: () => getWeightHistory(petId, 0, 1),
+    enabled: !!petId,
+  });
+
+  const leaveMutation = useMutation({
+    mutationFn: () => leavePetFamily(petId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pets', 'list'] });
+      router.replace('/(tabs)/mypage/pets');
+    },
+    onError: () => Alert.alert('오류', '가족 나가기에 실패했어요.'),
+  });
 
   const handleLeaveFamily = () => {
-    Alert.alert('가족 나가기', `${pet.name}의 가족에서 나가시겠어요?`, [
+    Alert.alert('가족 나가기', `${pet?.petName}의 가족에서 나가시겠어요?`, [
       { text: '취소', style: 'cancel' },
-      { text: '나가기', style: 'destructive' },
+      { text: '나가기', style: 'destructive', onPress: () => leaveMutation.mutate() },
     ]);
   };
+
+  if (petQuery.isLoading || !petQuery.data) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator color={DodoColors.brand} />
+      </View>
+    );
+  }
+
+  const pet = petQuery.data;
+  const latestWeight = weightQuery.data?.records?.[0];
+  const notes = pet.specialNotes ?? [];
+  const familyMembers = pet.familyMembers ?? [];
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -32,9 +73,11 @@ export default function PetDetailScreen() {
           <TouchableOpacity style={styles.outlineButton} onPress={() => router.back()}>
             <Text style={styles.outlineButtonText}>목록으로</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.outlineButton}>
-            <Text style={styles.outlineButtonText}>정보 수정</Text>
-          </TouchableOpacity>
+          <Link href={{ pathname: '/(tabs)/mypage/pets/[petId]/edit', params: { petId } }} asChild>
+            <TouchableOpacity style={styles.outlineButton}>
+              <Text style={styles.outlineButtonText}>정보 수정</Text>
+            </TouchableOpacity>
+          </Link>
         </View>
       </View>
 
@@ -45,20 +88,20 @@ export default function PetDetailScreen() {
           </View>
           <View style={styles.petHeaderTextCol}>
             <View style={styles.petNameRow}>
-              <Text style={styles.petName}>{pet.name}</Text>
-              {pet.gender && (
+              <Text style={styles.petName}>{pet.petName}</Text>
+              {pet.sex !== 'NEUTER' && (
                 <Ionicons
-                  name={pet.gender === 'F' ? 'female' : 'male'}
+                  name={pet.sex === 'FEMALE' ? 'female' : 'male'}
                   size={16}
-                  color={pet.gender === 'F' ? '#ec4899' : '#3b82f6'}
+                  color={pet.sex === 'FEMALE' ? '#ec4899' : '#3b82f6'}
                 />
               )}
             </View>
             <Text style={styles.petMeta}>
-              {pet.birthDate} ({pet.ageLabel})
+              {pet.birth?.slice(0, 10)} (만 {pet.age}세)
             </Text>
             <Text style={styles.petMeta}>
-              {pet.species} {pet.breed}
+              {speciesLabel(pet.species)} {pet.breed}
             </Text>
           </View>
         </View>
@@ -76,14 +119,14 @@ export default function PetDetailScreen() {
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoKey}>기준 심박수</Text>
-          <Text style={styles.infoValue}>{pet.baselineHeartRate}</Text>
+          <Text style={styles.infoValue}>{pet.referenceHeartRate}</Text>
         </View>
       </View>
 
       <View style={styles.card}>
         <View style={styles.cardHeaderRow}>
           <Text style={styles.infoLabel}>체중 정보</Text>
-          <Link href={{ pathname: '/(tabs)/mypage/pets/[petId]/weight', params: { petId: pet.id } }} asChild>
+          <Link href={{ pathname: '/(tabs)/mypage/pets/[petId]/weight', params: { petId } }} asChild>
             <TouchableOpacity>
               <Text style={styles.linkText}>전체보기</Text>
             </TouchableOpacity>
@@ -91,8 +134,8 @@ export default function PetDetailScreen() {
         </View>
         {latestWeight ? (
           <View style={styles.weightRow}>
-            <Text style={styles.weightValue}>{latestWeight.weightKg}kg</Text>
-            <Text style={styles.weightDate}>최근 측정일 {latestWeight.measuredAt}</Text>
+            <Text style={styles.weightValue}>{latestWeight.weight}kg</Text>
+            <Text style={styles.weightDate}>최근 측정일 {latestWeight.petWeightsMeasuredAt?.slice(0, 10)}</Text>
           </View>
         ) : (
           <Text style={styles.emptyText}>등록된 체중 기록이 없어요.</Text>
@@ -100,43 +143,54 @@ export default function PetDetailScreen() {
       </View>
 
       <View style={styles.card}>
-        <View style={styles.cardHeaderRow}>
-          <Text style={styles.infoLabel}>가족 구성원</Text>
-          <TouchableOpacity>
-            <Text style={styles.linkText}>전체보기</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.familyRow}>
-          <View style={styles.familyAvatar}>
-            <Ionicons name="person" size={16} color={DodoColors.brandForeground} />
+        <Text style={styles.infoLabel}>가족 구성원</Text>
+        {familyMembers.length === 0 ? (
+          <Text style={styles.emptyText}>가족 구성원이 없어요.</Text>
+        ) : (
+          <View style={styles.familyGrid}>
+            {familyMembers.map((member) => (
+              <View key={member.userId} style={styles.familyItem}>
+                {member.profileImageUrl ? (
+                  <Image source={{ uri: member.profileImageUrl }} style={styles.familyAvatarImage} contentFit="cover" />
+                ) : (
+                  <View style={styles.familyAvatar}>
+                    <Ionicons name="person" size={18} color={DodoColors.brandForeground} />
+                  </View>
+                )}
+                <Text style={styles.familyName} numberOfLines={1}>
+                  {member.userName}
+                </Text>
+              </View>
+            ))}
           </View>
-          <Text style={styles.emptyText}>가족 구성원 1명과 함께 관리 중이에요.</Text>
-        </View>
+        )}
       </View>
 
       <View style={styles.card}>
         <Text style={styles.infoLabel}>최근 활동</Text>
-        <Text style={styles.emptyText}>최근 활동 정보가 없습니다.</Text>
+        <Text style={styles.emptyText}>
+          {pet.lastActivity ? JSON.stringify(pet.lastActivity) : '최근 활동 정보가 없습니다.'}
+        </Text>
       </View>
 
       <View style={styles.card}>
         <View style={styles.cardHeaderRow}>
           <Text style={styles.infoLabel}>특이사항</Text>
-          <Link href={{ pathname: '/(tabs)/mypage/pets/[petId]/notes', params: { petId: pet.id } }} asChild>
+          <Link href={{ pathname: '/(tabs)/mypage/pets/[petId]/notes', params: { petId } }} asChild>
             <TouchableOpacity>
               <Text style={styles.linkText}>전체보기</Text>
             </TouchableOpacity>
           </Link>
         </View>
-        <Text style={styles.notesSummary}>총 {notes.length}개의 특이사항이 등록되어 있어요.</Text>
+        <Text style={styles.notesSummary}>총 {pet.specialNotesCount}개의 특이사항이 등록되어 있어요.</Text>
         {notes.slice(0, 3).map((note) => (
-          <View key={note.id} style={styles.noteRow}>
+          <View key={note.noteId} style={styles.noteRow}>
             <View style={styles.noteTag}>
-              <Text style={styles.noteTagText}>{note.tag}</Text>
+              <Text style={styles.noteTagText}>{NOTE_TYPE_LABEL[note.noteType] ?? note.noteType}</Text>
             </View>
-            <Text style={styles.noteDate}>{note.date}</Text>
+            <Text style={styles.noteDate}>{note.createdAt?.slice(0, 10)}</Text>
             <Text style={styles.noteContent} numberOfLines={1}>
-              {note.content}
+              {note.noteContent}
             </Text>
           </View>
         ))}
@@ -148,7 +202,7 @@ export default function PetDetailScreen() {
           가족에서 나가면 이 반려동물의 가족 구성원 목록과 관련 활동 기록을 더 이상 확인할 수 없어요. 다시 참여하려면
           초대 코드를 다시 등록해야 해요.
         </Text>
-        <TouchableOpacity style={styles.leaveButton} onPress={handleLeaveFamily}>
+        <TouchableOpacity style={styles.leaveButton} disabled={leaveMutation.isPending} onPress={handleLeaveFamily}>
           <Text style={styles.leaveButtonText}>가족 나가기</Text>
         </TouchableOpacity>
       </View>
@@ -160,6 +214,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: DodoColors.background,
+  },
+  centerContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   content: {
     padding: 16,
@@ -279,15 +337,31 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: DodoColors.fenceIdleLabel,
   },
-  familyRow: {
+  familyGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+  familyItem: {
+    width: 56,
     alignItems: 'center',
-    gap: 10,
+    gap: 4,
+  },
+  familyAvatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: DodoColors.background,
+  },
+  familyName: {
+    fontSize: 11,
+    color: DodoColors.textPrimary,
+    textAlign: 'center',
   },
   familyAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: DodoColors.brand,
     alignItems: 'center',
     justifyContent: 'center',

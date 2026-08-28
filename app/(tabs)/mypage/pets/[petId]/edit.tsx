@@ -1,12 +1,21 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
 import { AvatarImagePicker } from '@/components/common/avatar-image-picker';
 import { DatePickerModal } from '@/components/common/date-picker-modal';
 import { DodoColors } from '@/constants/theme';
-import { createPet } from '@/shared/api/petApi';
+import { getPetDetail, updatePet } from '@/shared/api/petApi';
 
 function todayString() {
   const now = new Date();
@@ -17,21 +26,21 @@ type Species = '강아지' | '고양이';
 type Gender = '수컷' | '암컷';
 
 const SPECIES_MAP: Record<Species, 'CANINE' | 'FELINE'> = { 강아지: 'CANINE', 고양이: 'FELINE' };
+const SPECIES_REVERSE: Record<'CANINE' | 'FELINE', Species> = { CANINE: '강아지', FELINE: '고양이' };
 const GENDER_MAP: Record<Gender, 'MALE' | 'FEMALE'> = { 수컷: 'MALE', 암컷: 'FEMALE' };
+const GENDER_REVERSE: Record<'MALE' | 'FEMALE' | 'NEUTER', Gender> = { MALE: '수컷', FEMALE: '암컷', NEUTER: '수컷' };
 
-function calculateAgeLabel(birthDate: string): string | null {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthDate.trim());
-  if (!match) return null;
+function calculateAgeFromBirth(birthDate: string): number {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(birthDate.trim());
+  if (!match) return 0;
   const [, y, m, d] = match;
   const birth = new Date(Number(y), Number(m) - 1, Number(d));
-  if (Number.isNaN(birth.getTime())) return null;
-
   const now = new Date();
   let age = now.getFullYear() - birth.getFullYear();
   const hasHadBirthdayThisYear =
     now.getMonth() > birth.getMonth() || (now.getMonth() === birth.getMonth() && now.getDate() >= birth.getDate());
   if (!hasHadBirthdayThisYear) age -= 1;
-  return `만 ${Math.max(age, 0)}세`;
+  return Math.max(age, 0);
 }
 
 function ChipSelect<T extends string>({
@@ -61,64 +70,84 @@ function ChipSelect<T extends string>({
   );
 }
 
-export default function NewPetScreen() {
+export default function EditPetScreen() {
+  const { petId } = useLocalSearchParams<{ petId: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+
+  const petQuery = useQuery({ queryKey: ['pets', petId], queryFn: () => getPetDetail(petId), enabled: !!petId });
+
   const [name, setName] = useState('');
   const [breed, setBreed] = useState('');
   const [species, setSpecies] = useState<Species | null>(null);
   const [gender, setGender] = useState<Gender | null>(null);
   const [birthDate, setBirthDate] = useState('');
-  const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [registrationNumber, setRegistrationNumber] = useState('');
   const [deviceId, setDeviceId] = useState('');
   const [baselineHeartRate, setBaselineHeartRate] = useState('');
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [datePickerVisible, setDatePickerVisible] = useState(false);
 
-  const ageLabel = useMemo(() => calculateAgeLabel(birthDate), [birthDate]);
+  useEffect(() => {
+    if (!petQuery.data) return;
+    const pet = petQuery.data;
+    setName(pet.petName);
+    setBreed(pet.breed);
+    setSpecies(SPECIES_REVERSE[pet.species]);
+    setGender(GENDER_REVERSE[pet.sex]);
+    setBirthDate(pet.birth?.slice(0, 10) ?? '');
+    setRegistrationNumber(pet.registrationNumber ?? '');
+    setDeviceId(pet.deviceId);
+    setBaselineHeartRate(String(pet.referenceHeartRate));
+    setImageUrl(pet.imageFileUrl ?? null);
+  }, [petQuery.data]);
+
+  const ageLabel = useMemo(() => (birthDate ? `만 ${calculateAgeFromBirth(birthDate)}세` : null), [birthDate]);
 
   const canSubmit =
     name.trim().length > 0 &&
     breed.trim().length > 0 &&
     !!species &&
     !!gender &&
-    !!ageLabel &&
+    birthDate.trim().length > 0 &&
     deviceId.trim().length > 0 &&
     baselineHeartRate.trim().length > 0;
 
-  const createMutation = useMutation({
+  const updateMutation = useMutation({
     mutationFn: () => {
-      const age = Number(ageLabel?.match(/\d+/)?.[0] ?? 0);
-      return createPet({
-        imageUrl: imageUrl ?? '',
+      if (!petQuery.data) throw new Error('not loaded');
+      return updatePet(petId, {
         imageFileUrl: imageUrl ?? '',
         petName: name.trim(),
         species: SPECIES_MAP[species as Species],
         sex: GENDER_MAP[gender as Gender],
         breed: breed.trim(),
         birth: `${birthDate.trim()}T00:00:00`,
-        age,
+        age: calculateAgeFromBirth(birthDate),
         registrationNumber: registrationNumber.trim() || undefined,
         referenceHeartRate: Number(baselineHeartRate),
         deviceId: deviceId.trim(),
       });
     },
-    onSuccess: ({ petId }) => {
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pets', petId] });
       queryClient.invalidateQueries({ queryKey: ['pets', 'list'] });
-      router.replace({ pathname: '/(tabs)/mypage/pets/[petId]', params: { petId: String(petId) } });
+      router.back();
     },
-    onError: () => Alert.alert('오류', '반려동물을 등록하지 못했어요. 잠시 후 다시 시도해주세요.'),
+    onError: () => Alert.alert('오류', '반려동물 정보를 수정하지 못했어요.'),
   });
+
+  if (petQuery.isLoading || !petQuery.data) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator color={DodoColors.brand} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.title}>새 반려동물 등록하기</Text>
-        <Text style={styles.subtitle}>
-          반려동물의 기본 정보와 디바이스 정보를 입력해 등록을 시작해보세요. 생년월일을 입력하면 만 나이는 자동으로
-          계산돼요.
-        </Text>
-
         <View style={styles.card}>
           <View style={styles.imageRow}>
             <AvatarImagePicker imageUrl={imageUrl} onUploaded={setImageUrl} size={72} />
@@ -127,28 +156,15 @@ export default function NewPetScreen() {
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>기본 정보</Text>
-          <Text style={styles.sectionHint}>이름, 종, 성별, 생년월일 같은 기본 프로필을 입력해 주세요.</Text>
 
           <View style={styles.fieldRow}>
             <View style={styles.fieldHalf}>
               <Text style={styles.label}>반려동물 이름 *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="예: 보리"
-                placeholderTextColor={DodoColors.fenceIdleLabel}
-                value={name}
-                onChangeText={setName}
-              />
+              <TextInput style={styles.input} value={name} onChangeText={setName} />
             </View>
             <View style={styles.fieldHalf}>
               <Text style={styles.label}>품종 *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="예: 말티즈"
-                placeholderTextColor={DodoColors.fenceIdleLabel}
-                value={breed}
-                onChangeText={setBreed}
-              />
+              <TextInput style={styles.input} value={breed} onChangeText={setBreed} />
             </View>
           </View>
 
@@ -166,7 +182,7 @@ export default function NewPetScreen() {
             <View style={styles.fieldHalf}>
               <Text style={styles.label}>생년월일 *</Text>
               <TouchableOpacity style={styles.readonlyInput} onPress={() => setDatePickerVisible(true)}>
-                <Text style={birthDate ? styles.readonlyValue : styles.readonlyPlaceholder}>
+                <Text style={birthDate ? styles.readonlyValue : styles.placeholderValue}>
                   {birthDate || '날짜 선택'}
                 </Text>
               </TouchableOpacity>
@@ -174,9 +190,7 @@ export default function NewPetScreen() {
             <View style={styles.fieldHalf}>
               <Text style={styles.label}>만 나이</Text>
               <View style={styles.readonlyInput}>
-                <Text style={ageLabel ? styles.readonlyValue : styles.readonlyPlaceholder}>
-                  {ageLabel ?? '생년월일을 입력하면 자동 계산돼요.'}
-                </Text>
+                <Text style={styles.readonlyValue}>{ageLabel ?? '-'}</Text>
               </View>
             </View>
           </View>
@@ -195,25 +209,15 @@ export default function NewPetScreen() {
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>디바이스 및 건강 기준값</Text>
-          <Text style={styles.sectionHint}>디바이스 ID와 기준 심박수를 입력해 이후 기능과 연결할 수 있어요.</Text>
-
           <View style={styles.fieldRow}>
             <View style={styles.fieldHalf}>
               <Text style={styles.label}>디바이스 ID *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="예: ABC123XYZ"
-                placeholderTextColor={DodoColors.fenceIdleLabel}
-                value={deviceId}
-                onChangeText={setDeviceId}
-              />
+              <TextInput style={styles.input} value={deviceId} onChangeText={setDeviceId} />
             </View>
             <View style={styles.fieldHalf}>
               <Text style={styles.label}>기준 심박수 *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="예: 85"
-                placeholderTextColor={DodoColors.fenceIdleLabel}
                 value={baselineHeartRate}
                 onChangeText={setBaselineHeartRate}
                 keyboardType="number-pad"
@@ -230,11 +234,11 @@ export default function NewPetScreen() {
           <Text style={styles.secondaryButtonText}>취소</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.primaryButton, (!canSubmit || createMutation.isPending) && styles.primaryButtonDisabled]}
-          disabled={!canSubmit || createMutation.isPending}
-          onPress={() => createMutation.mutate()}
+          style={[styles.primaryButton, (!canSubmit || updateMutation.isPending) && styles.primaryButtonDisabled]}
+          disabled={!canSubmit || updateMutation.isPending}
+          onPress={() => updateMutation.mutate()}
         >
-          <Text style={styles.primaryButtonText}>{createMutation.isPending ? '등록 중...' : '등록하기'}</Text>
+          <Text style={styles.primaryButtonText}>{updateMutation.isPending ? '저장 중...' : '저장하기'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -254,21 +258,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: DodoColors.background,
   },
+  centerContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   content: {
     padding: 16,
     paddingBottom: 32,
     gap: 16,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: DodoColors.textPrimary,
-  },
-  subtitle: {
-    fontSize: 12,
-    color: DodoColors.textSecondary,
-    lineHeight: 18,
-    marginTop: -8,
+  imageRow: {
+    alignItems: 'center',
   },
   card: {
     backgroundColor: DodoColors.surface,
@@ -278,62 +278,10 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 14,
   },
-  imageRow: {
-    flexDirection: 'row',
-    gap: 14,
-  },
-  imagePlaceholder: {
-    width: 72,
-    height: 72,
-    borderRadius: 16,
-    backgroundColor: DodoColors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  imageTextCol: {
-    flex: 1,
-    gap: 6,
-  },
-  imageBadgeRow: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  imageBadge: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: DodoColors.textSecondary,
-    backgroundColor: DodoColors.background,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 999,
-  },
-  imageHint: {
-    fontSize: 11,
-    color: DodoColors.fenceIdleLabel,
-    lineHeight: 16,
-  },
-  imageButton: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: DodoColors.border,
-  },
-  imageButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: DodoColors.textSecondary,
-  },
   sectionTitle: {
     fontSize: 14,
     fontWeight: '700',
     color: DodoColors.textPrimary,
-  },
-  sectionHint: {
-    fontSize: 11,
-    color: DodoColors.fenceIdleLabel,
-    marginTop: -8,
   },
   fieldRow: {
     flexDirection: 'row',
@@ -375,8 +323,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: DodoColors.textPrimary,
   },
-  readonlyPlaceholder: {
-    fontSize: 11,
+  placeholderValue: {
+    fontSize: 13,
     color: DodoColors.fenceIdleLabel,
   },
   chipRow: {
