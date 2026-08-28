@@ -49,6 +49,33 @@ export async function socialLogin(provider: SocialProvider, code: string): Promi
   return { kind: 'LOGIN', data: response.data as SocialLoginSuccess };
 }
 
+export interface RegisterProfileRequest {
+  hasFamily: boolean;
+  nickname: string;
+  region: string;
+  profileUrl?: string | null;
+}
+
+export interface RegisterProfileResponse extends AuthTokens {
+  message: string;
+  profileUrl: string;
+}
+
+/**
+ * 추가 정보 입력 → 가입 완료 (PUT /users/me/profile)
+ * - 202 응답으로 받은 registrationToken을 Authorization 헤더로 전달
+ * - 200: 계정 ACTIVE 전환 + 새 토큰 발급
+ */
+export async function registerProfile(
+  body: RegisterProfileRequest,
+  registrationToken: string,
+): Promise<RegisterProfileResponse> {
+  const response = await apiClient.put<RegisterProfileResponse>('/users/me/profile', body, {
+    headers: { Authorization: `Bearer ${registrationToken}` },
+  });
+  return response.data;
+}
+
 export interface LogoutResponse {
   message: string;
 }
