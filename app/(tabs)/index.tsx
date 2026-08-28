@@ -1,19 +1,15 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { useRouter, type Href } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DodoColors } from '@/constants/theme';
+import { getMain } from '@/shared/api/mainApi';
+import { useAuthStore } from '@/shared/lib/auth/authStore';
 
-// TODO(이슈4): GET /main 연동 후 mock 제거
-const MOCK_PET = {
-  name: '푸치',
-  ageLabel: '만 0세',
-  breed: '말티즈',
-  weight: '6 kg',
-};
-
-const MOCK_PET_PHOTOS = [0, 1, 2, 3, 4];
-
+// 공지사항 UI는 웹에서도 죽은 데이터(announcement 필드가 화면에 렌더되지 않음)라 목데이터를 그대로 유지한다.
 const MOCK_NOTICES: { tag: '안내' | '긴급'; title: string }[] = [
   { tag: '안내', title: '겨울 시즌 산책 챌린지 오픈!' },
   { tag: '긴급', title: '일부 알림 지연 현상 안내' },
@@ -21,8 +17,57 @@ const MOCK_NOTICES: { tag: '안내' | '긴급'; title: string }[] = [
   { tag: '안내', title: '반려동물 프로필 개선 업데이트' },
 ];
 
+function sexLabel(sex: 'MALE' | 'FEMALE' | 'NEUTER') {
+  if (sex === 'MALE') return '수컷';
+  if (sex === 'FEMALE') return '암컷';
+  return '중성화';
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const [selectedPetId, setSelectedPetId] = useState<number | null>(null);
+
+  const mainQuery = useQuery({
+    queryKey: ['main'],
+    queryFn: getMain,
+    enabled: isAuthenticated,
+  });
+
+  const petProfiles = mainQuery.data?.petProfiles ?? [];
+  const activePetId = selectedPetId ?? petProfiles[0]?.petId ?? null;
+  const selectedPet = petProfiles.find((p) => p.petId === activePetId) ?? null;
+
+  const latestReport = useMemo(() => {
+    const reports = (mainQuery.data?.healthReports ?? []).filter((r) => r.petId === activePetId);
+    if (reports.length === 0) return null;
+    return [...reports].sort((a, b) => (a.checkupDate < b.checkupDate ? 1 : -1))[0];
+  }, [mainQuery.data, activePetId]);
+
+  if (!isAuthenticated) {
+    return (
+      <View style={styles.container}>
+        <View style={[styles.content, styles.guestContent, { paddingTop: insets.top + 16 }]}>
+          <Ionicons name="paw" size={40} color={DodoColors.secondary} />
+          <Text style={styles.guestTitle}>DoDo에 오신 걸 환영해요</Text>
+          <Text style={styles.guestSubtitle}>로그인하면 반려동물의 건강 리포트와 산책 정보를 확인할 수 있어요.</Text>
+          <TouchableOpacity style={styles.loginButton} onPress={() => router.push('/auth' as Href)}>
+            <Text style={styles.loginButtonText}>로그인하기</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  if (mainQuery.isLoading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator color={DodoColors.brand} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}>
@@ -37,50 +82,72 @@ export default function HomeScreen() {
             <Ionicons name="paw" size={48} color={DodoColors.secondary} />
           </View>
 
-          <Text style={styles.reportTitle}>{MOCK_PET.name}의 건강 데이터를 분석 중이에요.</Text>
-          <Text style={styles.reportDescription}>
-            {MOCK_PET.name}의 첫 건강 레포트를 만들 수 있도록 산책과 건강 기록을 조금 더 쌓아보세요.
-          </Text>
+          {latestReport ? (
+            <>
+              <Text style={styles.reportTitle}>{latestReport.healthReportTitle}</Text>
+              <Text style={styles.reportDescription}>{latestReport.healthReportSummary}</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.reportTitle}>{selectedPet?.name ?? '반려동물'}의 건강 데이터를 분석 중이에요.</Text>
+              <Text style={styles.reportDescription}>
+                {selectedPet?.name ?? '반려동물'}의 첫 건강 레포트를 만들 수 있도록 산책과 건강 기록을 조금 더
+                쌓아보세요.
+              </Text>
+            </>
+          )}
 
           <TouchableOpacity style={styles.reportLinkRow}>
-            <Text style={styles.reportLinkText}>레포트 준비 중</Text>
+            <Text style={styles.reportLinkText}>{latestReport ? '레포트 자세히 보기' : '레포트 준비 중'}</Text>
             <Ionicons name="chevron-forward" size={14} color={DodoColors.fenceIdleLabel} />
           </TouchableOpacity>
         </View>
 
         {/* 펫 카드 */}
-        <View style={styles.card}>
-          <View style={styles.petHeaderRow}>
-            <View style={styles.petAvatar}>
-              <Ionicons name="paw" size={28} color={DodoColors.brandForeground} />
-            </View>
-            <View style={styles.petNameCol}>
-              <Text style={styles.petName}>{MOCK_PET.name}</Text>
-            </View>
-            <View style={styles.ageBadge}>
-              <Text style={styles.ageBadgeText}>{MOCK_PET.ageLabel}</Text>
-            </View>
-          </View>
-
-          <View style={styles.petStatsRow}>
-            <View style={styles.petStatItem}>
-              <Text style={styles.petStatLabel}>품종</Text>
-              <Text style={styles.petStatValue}>{MOCK_PET.breed}</Text>
-            </View>
-            <View style={styles.petStatItem}>
-              <Text style={styles.petStatLabel}>체중</Text>
-              <Text style={styles.petStatValue}>{MOCK_PET.weight}</Text>
-            </View>
-          </View>
-
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbnailRow}>
-            {MOCK_PET_PHOTOS.map((id, index) => (
-              <View key={id} style={[styles.thumbnail, index === 0 && styles.thumbnailSelected]}>
-                <Ionicons name="paw-outline" size={20} color={DodoColors.fenceIdleLabel} />
+        {selectedPet && (
+          <View style={styles.card}>
+            <View style={styles.petHeaderRow}>
+              <View style={styles.petAvatar}>
+                <Ionicons name="paw" size={28} color={DodoColors.brandForeground} />
               </View>
-            ))}
-          </ScrollView>
-        </View>
+              <View style={styles.petNameCol}>
+                <Text style={styles.petName}>{selectedPet.name}</Text>
+              </View>
+              <View style={styles.ageBadge}>
+                <Text style={styles.ageBadgeText}>만 {selectedPet.age}세</Text>
+              </View>
+            </View>
+
+            <View style={styles.petStatsRow}>
+              <View style={styles.petStatItem}>
+                <Text style={styles.petStatLabel}>품종</Text>
+                <Text style={styles.petStatValue}>{selectedPet.breed}</Text>
+              </View>
+              <View style={styles.petStatItem}>
+                <Text style={styles.petStatLabel}>체중</Text>
+                <Text style={styles.petStatValue}>{selectedPet.weight} kg</Text>
+              </View>
+              <View style={styles.petStatItem}>
+                <Text style={styles.petStatLabel}>성별</Text>
+                <Text style={styles.petStatValue}>{sexLabel(selectedPet.sex)}</Text>
+              </View>
+            </View>
+
+            {petProfiles.length > 1 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.thumbnailRow}>
+                {petProfiles.map((pet) => (
+                  <TouchableOpacity
+                    key={pet.petId}
+                    style={[styles.thumbnail, pet.petId === activePetId && styles.thumbnailSelected]}
+                    onPress={() => setSelectedPetId(pet.petId)}
+                  >
+                    <Ionicons name="paw-outline" size={20} color={DodoColors.fenceIdleLabel} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        )}
 
         {/* 공지사항 */}
         <View style={styles.card}>
@@ -117,10 +184,44 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: DodoColors.background,
   },
+  centerContent: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   content: {
     padding: 16,
     gap: 12,
     paddingBottom: 32,
+  },
+  guestContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingHorizontal: 32,
+  },
+  guestTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: DodoColors.textPrimary,
+    marginTop: 8,
+  },
+  guestSubtitle: {
+    fontSize: 13,
+    color: DodoColors.textSecondary,
+    textAlign: 'center',
+  },
+  loginButton: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: DodoColors.brand,
+  },
+  loginButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: DodoColors.brandForeground,
   },
   card: {
     backgroundColor: DodoColors.surface,
