@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { Image } from 'expo-image';
 import { Link } from 'expo-router';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -13,6 +14,7 @@ export type BoardPost = {
   likeCount: number;
   commentCount: number;
   viewCount: number;
+  thumbnailImageUrl: string | null;
 };
 
 export function PostRow({ post }: { post: BoardPost }) {
@@ -44,9 +46,13 @@ export function PostRow({ post }: { post: BoardPost }) {
             <Text style={styles.postMetaText}>조회 {post.viewCount}</Text>
           </View>
         </View>
-        <View style={styles.postThumbnail}>
-          <Ionicons name="image-outline" size={22} color={DodoColors.fenceIdleLabel} />
-        </View>
+        {post.thumbnailImageUrl ? (
+          <Image source={{ uri: post.thumbnailImageUrl }} style={styles.postThumbnail} contentFit="cover" />
+        ) : (
+          <View style={styles.postThumbnail}>
+            <Ionicons name="image-outline" size={22} color={DodoColors.fenceIdleLabel} />
+          </View>
+        )}
       </TouchableOpacity>
     </Link>
   );

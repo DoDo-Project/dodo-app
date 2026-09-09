@@ -20,6 +20,7 @@ function toBoardPost(board: BoardListItem): BoardPost {
     likeCount: board.likeCount,
     commentCount: board.commentCount,
     viewCount: board.viewCount,
+    thumbnailImageUrl: board.thumbnailImageUrl,
   };
 }
 

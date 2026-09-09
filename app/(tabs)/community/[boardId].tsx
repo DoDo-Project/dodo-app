@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -168,10 +169,12 @@ export default function BoardDetailScreen() {
 
           <Text style={styles.title}>{post.boardTitle}</Text>
 
-          {post.imageFileUrls.length === 0 && (
-            <View style={styles.photo}>
-              <Ionicons name="image-outline" size={40} color={DodoColors.fenceIdleLabel} />
-            </View>
+          {post.imageFileUrls.length > 0 && (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.photoRow}>
+              {post.imageFileUrls.map((url) => (
+                <Image key={url} source={{ uri: url }} style={styles.photo} contentFit="cover" />
+              ))}
+            </ScrollView>
           )}
 
           <Text style={styles.body}>{post.boardContent}</Text>
@@ -381,15 +384,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: DodoColors.textPrimary,
   },
+  photoRow: {
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+  },
   photo: {
-    width: '100%',
+    width: 260,
     height: 220,
     borderRadius: 16,
     backgroundColor: DodoColors.surface,
     borderWidth: 1,
     borderColor: DodoColors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginRight: 8,
   },
   body: {
     fontSize: 14,

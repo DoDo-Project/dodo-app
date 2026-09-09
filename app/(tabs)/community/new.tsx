@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
@@ -22,6 +22,7 @@ const DRAFT_SESSION_KEY_STORAGE = 'dodo.boardDraft.sessionKey';
 
 export default function NewPostScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [imageUrls, setImageUrls] = useState<string[]>([]);
@@ -47,6 +48,7 @@ export default function NewPostScreen() {
     mutationFn: () => createBoard({ boardTitle: title.trim(), boardContent: content.trim(), imageFileUrls: imageUrls }),
     onSuccess: async ({ boardId }) => {
       await AsyncStorage.removeItem(DRAFT_SESSION_KEY_STORAGE);
+      queryClient.invalidateQueries({ queryKey: ['boards'] });
       router.replace({ pathname: '/(tabs)/community/[boardId]', params: { boardId: String(boardId) } });
     },
     onError: () => Alert.alert('오류', '게시글을 등록하지 못했어요. 잠시 후 다시 시도해주세요.'),
