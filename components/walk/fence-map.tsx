@@ -36,15 +36,29 @@ export function FenceMap({
     >
       {fences.map((fence) => {
         const selected = fence.petId === selectedPetId;
+        // 미사용 울타리는 선택 여부와 무관하게 항상 회색으로 표시 — active 상태가 색상의 1순위 기준
+        if (!fence.active) {
+          return (
+            <NaverMapCircleOverlay
+              key={fence.fenceId}
+              latitude={fence.latitude}
+              longitude={fence.longitude}
+              radius={fence.radiusMeters}
+              color="rgba(107,114,128,0.12)"
+              outlineWidth={selected ? 2 : 1}
+              outlineColor={DodoColors.fenceIdleLabel}
+            />
+          );
+        }
         return (
           <NaverMapCircleOverlay
             key={fence.fenceId}
             latitude={fence.latitude}
             longitude={fence.longitude}
             radius={fence.radiusMeters}
-            color={selected ? 'rgba(34,197,94,0.25)' : 'rgba(107,114,128,0.12)'}
+            color={selected ? 'rgba(34,197,94,0.25)' : 'rgba(34,197,94,0.12)'}
             outlineWidth={selected ? 2 : 1}
-            outlineColor={selected ? DodoColors.fenceInside : DodoColors.fenceIdleLabel}
+            outlineColor={DodoColors.fenceInside}
           />
         );
       })}

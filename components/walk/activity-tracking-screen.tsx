@@ -15,9 +15,10 @@ import {
   inferActivityStatus,
   startActivityHistory,
 } from '@/shared/api/activityApi';
-import { getPetsList } from '@/shared/api/petApi';
+import { getPetListName, getPetsList } from '@/shared/api/petApi';
 import { durationSecondsBetween, formatDurationSeconds } from '@/shared/lib/format/date';
 import { totalRouteDistanceMeters } from '@/shared/lib/geo/haversine';
+import { useCurrentLocation } from '@/shared/lib/geo/useCurrentLocation';
 import { useActivityLocationSocket } from '@/shared/lib/ws/useActivityLocationSocket';
 import { useFenceLocationSocket } from '@/shared/lib/ws/useFenceLocationSocket';
 
@@ -53,6 +54,8 @@ export function ActivityTrackingScreen({ activeTab, onChangeTab }: Props) {
 
   // 펫 트래커 위치(시작 좌표 확보용) — 울타리 기능과 같은 채널, petId 기준
   const liveLocation = useFenceLocationSocket(selectedPetId);
+  // 폰의 실제 GPS 위치 — 펫 트래커 위치가 아직 없을 때 지도/시작 좌표의 대체값으로 쓴다
+  const currentUserLocation = useCurrentLocation();
   // 산책 활동 실시간 경로 — historyId 기준 별도 채널(백엔드 확인됨). 진행 중일 때만 구독한다.
   const activityRoutePoint = useActivityLocationSocket(trackingState === 'in_progress' ? liveHistoryId : null);
   const activityCoord: Coord | null = activityRoutePoint
@@ -131,7 +134,7 @@ export function ActivityTrackingScreen({ activeTab, onChangeTab }: Props) {
       }
       const coord: Coord = liveLocation
         ? { latitude: liveLocation.latitude, longitude: liveLocation.longitude }
-        : DEFAULT_CENTER;
+        : (currentUserLocation ?? DEFAULT_CENTER);
       await startActivityHistory(historyId, { startLatitude: coord.latitude, startLongitude: coord.longitude });
       return { historyId, coord };
     },
@@ -190,7 +193,8 @@ export function ActivityTrackingScreen({ activeTab, onChangeTab }: Props) {
 
   const selectedPet = pets.find((p) => p.petId === selectedPetId) ?? null;
   const isTracking = trackingState !== 'idle';
-  const mapCenter = activityCoord ?? routePoints[routePoints.length - 1] ?? liveLocation ?? DEFAULT_CENTER;
+  const mapCenter =
+    activityCoord ?? routePoints[routePoints.length - 1] ?? liveLocation ?? currentUserLocation ?? DEFAULT_CENTER;
 
   if (petsQuery.isLoading) {
     return (
@@ -226,20 +230,18 @@ export function ActivityTrackingScreen({ activeTab, onChangeTab }: Props) {
                       style={[styles.chip, selected && styles.chipSelected, isTracking && styles.chipDisabled]}
                       onPress={() => setSelectedPetId(pet.petId)}
                     >
-                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{pet.name}</Text>
+                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{getPetListName(pet)}</Text>
                     </TouchableOpacity>
                   );
                 })}
               </ScrollView>
 
-              {isTracking && (
-                <ActivityMap
-                  center={mapCenter}
-                  points={routePoints}
-                  currentLocation={activityCoord}
-                  startPoint={routePoints[0] ?? null}
-                />
-              )}
+              <ActivityMap
+                center={mapCenter}
+                points={routePoints}
+                currentLocation={isTracking ? activityCoord : currentUserLocation}
+                startPoint={routePoints[0] ?? null}
+              />
 
               {isTracking && (
                 <View style={styles.statsRow}>
@@ -265,7 +267,9 @@ export function ActivityTrackingScreen({ activeTab, onChangeTab }: Props) {
                   onPress={() => startMutation.mutate()}
                 >
                   <Text style={styles.primaryButtonText}>
-                    {startMutation.isPending ? '시작하는 중...' : `${selectedPet?.name ?? ''} 산책 시작`}
+                    {startMutation.isPending
+                      ? '시작하는 중...'
+                      : `${selectedPet ? getPetListName(selectedPet) : ''} 산책 시작`}
                   </Text>
                 </TouchableOpacity>
               ) : trackingState === 'in_progress' ? (

@@ -16,7 +16,7 @@ export function ActivityMap({ center, points, currentLocation, startPoint }: Pro
   return (
     <NaverMapView
       style={styles.map}
-      camera={{ latitude: center.latitude, longitude: center.longitude, zoom: 15 }}
+      camera={{ latitude: center.latitude, longitude: center.longitude, zoom: 17 }}
       animationDuration={300}
     >
       {points.length > 1 && <NaverMapPolylineOverlay coords={points} width={5} color={DodoColors.brand} />}
@@ -25,7 +25,9 @@ export function ActivityMap({ center, points, currentLocation, startPoint }: Pro
           latitude={startPoint.latitude}
           longitude={startPoint.longitude}
           image={{ symbol: 'green' }}
-          caption={{ text: '출발' }}
+          width={22}
+          height={30}
+          caption={{ text: '출발', textSize: 11 }}
         />
       )}
       {currentLocation && (
@@ -33,6 +35,8 @@ export function ActivityMap({ center, points, currentLocation, startPoint }: Pro
           latitude={currentLocation.latitude}
           longitude={currentLocation.longitude}
           image={{ symbol: 'red' }}
+          width={22}
+          height={30}
         />
       )}
     </NaverMapView>

@@ -14,7 +14,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DodoColors } from '@/constants/theme';
 import { createFence, getFenceBoundaries, toggleFence, updateFence } from '@/shared/api/fenceApi';
-import { getPetsList } from '@/shared/api/petApi';
+import { getPetListName, getPetsList } from '@/shared/api/petApi';
+import { useCurrentLocation } from '@/shared/lib/geo/useCurrentLocation';
 import { useFenceLocationSocket, type FenceLocationPayload } from '@/shared/lib/ws/useFenceLocationSocket';
 
 import { WalkTabSwitcher, type WalkTab } from './walk-tab-switcher';
@@ -87,6 +88,7 @@ export function FenceSettingsScreen({ renderMap, activeTab, onChangeTab }: Props
   const selectedFence = fences.find((f) => f.petId === selectedPetId) ?? null;
   const selectedPet = pets.find((p) => p.petId === selectedPetId) ?? null;
   const liveLocation = useFenceLocationSocket(selectedPetId);
+  const currentUserLocation = useCurrentLocation();
 
   const [isEditing, setIsEditing] = useState(false);
   const [fenceNameInput, setFenceNameInput] = useState('');
@@ -94,14 +96,14 @@ export function FenceSettingsScreen({ renderMap, activeTab, onChangeTab }: Props
   const [pendingCenter, setPendingCenter] = useState<Coord | null>(null);
 
   const startEditing = () => {
-    setFenceNameInput(selectedFence?.fenceName ?? (selectedPet ? `${selectedPet.name}의 울타리` : ''));
+    setFenceNameInput(selectedFence?.fenceName ?? (selectedPet ? `${getPetListName(selectedPet)}의 울타리` : ''));
     setRadiusInput(selectedFence?.radiusMeters ?? 200);
     setPendingCenter(
       selectedFence
         ? { latitude: selectedFence.latitude, longitude: selectedFence.longitude }
         : liveLocation
           ? { latitude: liveLocation.latitude, longitude: liveLocation.longitude }
-          : DEFAULT_CENTER,
+          : (currentUserLocation ?? DEFAULT_CENTER),
     );
     setIsEditing(true);
   };
@@ -145,7 +147,7 @@ export function FenceSettingsScreen({ renderMap, activeTab, onChangeTab }: Props
       ? { latitude: selectedFence.latitude, longitude: selectedFence.longitude }
       : liveLocation
         ? { latitude: liveLocation.latitude, longitude: liveLocation.longitude }
-        : DEFAULT_CENTER);
+        : (currentUserLocation ?? DEFAULT_CENTER));
   // 네이티브 지도 크래시(NaN 좌표) 방지용 최종 안전망
   const mapCenter: Coord =
     Number.isFinite(rawMapCenter.latitude) && Number.isFinite(rawMapCenter.longitude) ? rawMapCenter : DEFAULT_CENTER;
@@ -196,7 +198,7 @@ export function FenceSettingsScreen({ renderMap, activeTab, onChangeTab }: Props
                     setIsEditing(false);
                   }}
                 >
-                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{pet.name}</Text>
+                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{getPetListName(pet)}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -217,7 +219,8 @@ export function FenceSettingsScreen({ renderMap, activeTab, onChangeTab }: Props
           {showOutsideBanner && (
             <View style={styles.outsideBanner}>
               <Text style={styles.outsideBannerText}>
-                {selectedPet?.name}이(가) 울타리를 벗어났어요! (약 {Math.round(liveLocation?.distanceMeter ?? 0)}m)
+                {selectedPet ? getPetListName(selectedPet) : ''}이(가) 울타리를 벗어났어요! (약{' '}
+                {Math.round(liveLocation?.distanceMeter ?? 0)}m)
               </Text>
             </View>
           )}
@@ -251,7 +254,9 @@ export function FenceSettingsScreen({ renderMap, activeTab, onChangeTab }: Props
               </View>
             ) : (
               <View style={styles.fenceInfoRow}>
-                <Text style={styles.emptyFenceText}>{selectedPet?.name}에게 설정된 울타리가 없어요.</Text>
+                <Text style={styles.emptyFenceText}>
+                  {selectedPet ? getPetListName(selectedPet) : ''}에게 설정된 울타리가 없어요.
+                </Text>
                 <TouchableOpacity style={styles.editButton} onPress={startEditing}>
                   <Text style={styles.editButtonText}>울타리 생성</Text>
                 </TouchableOpacity>
