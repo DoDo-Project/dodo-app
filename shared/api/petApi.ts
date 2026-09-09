@@ -15,12 +15,18 @@ export interface FamilyMember {
 
 export interface PetListItem {
   petId: number;
-  name: string;
+  /** 실제 필드명이 name/petName 중 무엇인지 응답으로 재확인되지 않아 둘 다 방어적으로 받는다 — getPetListName()으로 읽을 것 */
+  name?: string;
+  petName?: string;
   imageFileUrl: string | null;
   breed: string;
   age: number;
   species: PetSpecies;
   sex: PetSex;
+}
+
+export function getPetListName(pet: PetListItem): string {
+  return pet.petName ?? pet.name ?? '';
 }
 
 export interface GetPetsListResponse {
