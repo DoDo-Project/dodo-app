@@ -9,9 +9,11 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
+      "bundleIdentifier": "com.dodo.app",
       "supportsTablet": true
     },
     "android": {
+      "package": "com.dodo.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -38,7 +40,29 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      [
+        "@mj-studio/react-native-naver-map",
+        {
+          "client_id": "furxnmcb69"
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "사진을 선택하려면 앨범 접근 권한이 필요해요.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "산책 중 현재 위치를 지도에 표시하려면 위치 접근 권한이 필요해요."
+        }
+      ],
+      "./plugins/withNaverMapsRepository.js"
     ],
     "experiments": {
       "typedRoutes": true,
