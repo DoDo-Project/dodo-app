@@ -5,7 +5,8 @@ import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { DodoColors } from '@/constants/theme';
-import { getPetDetail, getWeightHistory, leavePetFamily } from '@/shared/api/petApi';
+import { getPetDetail, getWeightHistory, leavePetFamily, type PetActivity } from '@/shared/api/petApi';
+import { formatFullDateTime } from '@/shared/lib/format/date';
 
 const NOTE_TYPE_LABEL: Record<string, string> = {
   ALLERGY: '알레르기',
@@ -17,8 +18,40 @@ const NOTE_TYPE_LABEL: Record<string, string> = {
   ETC: '기타',
 };
 
+// 백엔드가 measuredAt 외에 어떤 필드를 더 주는지 확정되지 않아, 알려진 키는 한글 라벨로 보여주고 나머지는 원래 키를 그대로 보여준다.
+const ACTIVITY_FIELD_LABEL: Record<string, string> = {
+  activityType: '활동 종류',
+  distance: '이동 거리',
+  duration: '소요 시간',
+  steps: '걸음 수',
+  calories: '소모 칼로리',
+  heartRate: '심박수',
+  avgHeartRate: '평균 심박수',
+};
+
 function speciesLabel(species: 'CANINE' | 'FELINE') {
   return species === 'CANINE' ? '강아지' : '고양이';
+}
+
+function LastActivitySummary({ activity }: { activity: PetActivity }) {
+  const { measuredAt, ...rest } = activity;
+  const entries = Object.entries(rest).filter(([, value]) => value !== null && value !== undefined && value !== '');
+
+  return (
+    <View style={styles.activityCol}>
+      {measuredAt && <Text style={styles.activityDate}>{formatFullDateTime(measuredAt)}</Text>}
+      {entries.length === 0 ? (
+        <Text style={styles.emptyText}>세부 활동 정보가 없어요.</Text>
+      ) : (
+        entries.map(([key, value]) => (
+          <View key={key} style={styles.activityRow}>
+            <Text style={styles.activityKey}>{ACTIVITY_FIELD_LABEL[key] ?? key}</Text>
+            <Text style={styles.activityValue}>{String(value)}</Text>
+          </View>
+        ))
+      )}
+    </View>
+  );
 }
 
 export default function PetDetailScreen() {
@@ -168,9 +201,11 @@ export default function PetDetailScreen() {
 
       <View style={styles.card}>
         <Text style={styles.infoLabel}>최근 활동</Text>
-        <Text style={styles.emptyText}>
-          {pet.lastActivity ? JSON.stringify(pet.lastActivity) : '최근 활동 정보가 없습니다.'}
-        </Text>
+        {pet.lastActivity ? (
+          <LastActivitySummary activity={pet.lastActivity} />
+        ) : (
+          <Text style={styles.emptyText}>최근 활동 정보가 없습니다.</Text>
+        )}
       </View>
 
       <View style={styles.card}>
@@ -369,6 +404,26 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 12,
     color: DodoColors.fenceIdleLabel,
+  },
+  activityCol: {
+    gap: 6,
+  },
+  activityDate: {
+    fontSize: 11,
+    color: DodoColors.fenceIdleLabel,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  activityKey: {
+    fontSize: 12,
+    color: DodoColors.textSecondary,
+  },
+  activityValue: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: DodoColors.textPrimary,
   },
   notesSummary: {
     fontSize: 12,

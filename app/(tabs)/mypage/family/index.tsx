@@ -7,7 +7,7 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacit
 
 import { DodoColors } from '@/constants/theme';
 import { createInvitationCode, getPendingUsers } from '@/shared/api/familyApi';
-import { getPetDetail, getPetsList } from '@/shared/api/petApi';
+import { getPetDetail, getPetListName, getPetsList } from '@/shared/api/petApi';
 import { getInvitationCode, saveInvitationCode } from '@/shared/lib/family/invitationCodeCache';
 
 export default function FamilyScreen() {
@@ -43,7 +43,10 @@ export default function FamilyScreen() {
     onSuccess: async ({ code, expiresIn }) => {
       await saveInvitationCode(selectedPetId as number, code, expiresIn);
       setCachedCode({ code, expiresAt: Date.now() + expiresIn * 1000 });
-      Alert.alert('초대 코드 발급', `${selectedPet?.name}의 초대 코드가 발급됐어요.\n\n${code}`);
+      Alert.alert(
+        '초대 코드 발급',
+        `${selectedPet ? getPetListName(selectedPet) : ''}의 초대 코드가 발급됐어요.\n\n${code}`,
+      );
     },
     onError: () => Alert.alert('오류', '초대 코드를 발급하지 못했어요.'),
   });
@@ -90,7 +93,7 @@ export default function FamilyScreen() {
                 style={[styles.chip, selected && styles.chipSelected]}
                 onPress={() => setSelectedPetId(pet.petId)}
               >
-                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{pet.name}</Text>
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{getPetListName(pet)}</Text>
               </TouchableOpacity>
             );
           })}
@@ -104,7 +107,7 @@ export default function FamilyScreen() {
           </View>
           <View style={styles.petTextCol}>
             <View style={styles.petNameRow}>
-              <Text style={styles.petName}>{selectedPet.name}</Text>
+              <Text style={styles.petName}>{getPetListName(selectedPet)}</Text>
               <View style={styles.familyCountBadge}>
                 <Text style={styles.familyCountBadgeText}>가족 {members.length}명</Text>
               </View>

@@ -4,7 +4,7 @@ import { Link } from 'expo-router';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import { DodoColors } from '@/constants/theme';
-import { getPetsList, type PetSex } from '@/shared/api/petApi';
+import { getPetListName, getPetsList, type PetSex } from '@/shared/api/petApi';
 
 function GenderIcon({ sex }: { sex: PetSex }) {
   if (sex === 'NEUTER') return null;
@@ -69,7 +69,7 @@ export default function PetListScreen() {
           </View>
           <View style={styles.petInfo}>
             <View style={styles.petNameRow}>
-              <Text style={styles.petName}>{pet.name}</Text>
+              <Text style={styles.petName}>{getPetListName(pet)}</Text>
               <GenderIcon sex={pet.sex} />
             </View>
             <Text style={styles.petMeta}>만 {pet.age}세</Text>
