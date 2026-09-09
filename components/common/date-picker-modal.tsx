@@ -59,10 +59,11 @@ export function DatePickerModal({ visible, initialDate, maxDate, minDate, onClos
   const startWeekday = firstOfMonth.getDay();
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
 
-  const cells: (number | null)[] = [
-    ...Array.from({ length: startWeekday }, () => null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
+  // 항상 6행(42칸)으로 고정해서 달마다 일수가 달라져도 캘린더 높이가 흔들리지 않게 한다
+  const leadingCells = Array.from({ length: startWeekday }, () => null);
+  const dayCells = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+  const trailingCount = Math.max(0, 42 - leadingCells.length - dayCells.length);
+  const cells: (number | null)[] = [...leadingCells, ...dayCells, ...Array.from({ length: trailingCount }, () => null)];
 
   const goPrevMonth = () => {
     if (viewMonth === 0) {
